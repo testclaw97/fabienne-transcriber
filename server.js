@@ -15,6 +15,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const GLADIA_API_KEY = process.env.GLADIA_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const ROOT_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1T1TrG_5JpMolwTEm2oiKKH4C-n7fLtar';
 const PORT = process.env.PORT || 3000;
 
@@ -225,6 +226,45 @@ function formatTranscript(gladiaResult) {
   }));
 }
 
+// ── Groq Whisper fallback ─────────────────────────────────────────────────────
+
+async function transcribeWithGroq(audioPath) {
+  const form = new FormData();
+  form.append('file', fs.createReadStream(audioPath), {
+    filename: 'audio.mp3',
+    contentType: 'audio/mpeg',
+  });
+  form.append('model', 'whisper-large-v3');
+  form.append('language', 'de');
+  form.append('response_format', 'verbose_json');
+
+  const response = await axios.post(
+    'https://api.groq.com/openai/v1/audio/transcriptions',
+    form,
+    {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
+      maxBodyLength: Infinity,
+      timeout: 300_000,
+    }
+  );
+
+  // Convert Groq's verbose_json format to our transcript shape
+  const segments = response.data.segments || [];
+  if (segments.length > 0) {
+    return segments.map(s => ({
+      start: Math.floor(s.start),
+      timestamp: formatTimestamp(s.start),
+      text: (s.text || '').trim(),
+    }));
+  }
+
+  // Groq returned plain text only — wrap as single entry
+  return [{ start: 0, timestamp: '00:00', text: (response.data.text || '').trim() }];
+}
+
 // ── Job processor ─────────────────────────────────────────────────────────────
 
 async function processJob(jobId, fileId) {
@@ -255,15 +295,20 @@ async function processJob(jobId, fileId) {
     // Delete video right away — we only need the audio
     fs.rmSync(videoPath, { force: true });
 
-    notifyClients(jobId, { type: 'progress', step: 'uploading', pct: 35, message: 'Lade Audio hoch…' });
-    const audioUrl = await uploadToGladia(audioPath);
-
-    notifyClients(jobId, { type: 'progress', step: 'transcribing', pct: 50, message: 'Starte Transkription…' });
-    const transcriptionId = await startTranscription(audioUrl);
-
-    const gladiaResult = await pollTranscription(transcriptionId, jobId);
-
-    const transcript = formatTranscript(gladiaResult);
+    let transcript;
+    try {
+      notifyClients(jobId, { type: 'progress', step: 'uploading', pct: 35, message: 'Lade Audio hoch…' });
+      const audioUrl = await uploadToGladia(audioPath);
+      notifyClients(jobId, { type: 'progress', step: 'transcribing', pct: 50, message: 'Starte Transkription…' });
+      const transcriptionId = await startTranscription(audioUrl);
+      const gladiaResult = await pollTranscription(transcriptionId, jobId);
+      transcript = formatTranscript(gladiaResult);
+    } catch (gladiaErr) {
+      console.error('Gladia failed, trying Groq fallback:', gladiaErr.message);
+      if (!GROQ_API_KEY) throw gladiaErr;
+      notifyClients(jobId, { type: 'progress', step: 'transcribing', pct: 50, message: 'Transkribiere mit Backup-Dienst…' });
+      transcript = await transcribeWithGroq(audioPath);
+    }
     const fullText = transcript.map(t => `[${t.timestamp}] ${t.text}`).join('\n');
 
     const job = jobs.get(jobId);
