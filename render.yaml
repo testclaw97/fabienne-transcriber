@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: fabienne-transcriber
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: GLADIA_API_KEY
+        sync: false
+      - key: DRIVE_FOLDER_ID
+        value: 1T1TrG_5JpMolwTEm2oiKKH4C-n7fLtar
+      - key: PORT
+        value: 3000
