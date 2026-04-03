@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Transkription</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 80px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 6px; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 28px; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 24px 28px;
+      width: 100%;
+      max-width: 720px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+    }
+    .breadcrumb-item {
+      color: #5b5ef4;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .breadcrumb-item:hover { text-decoration: underline; }
+    .breadcrumb-item.current { color: #333; cursor: default; font-weight: 600; }
+    .breadcrumb-item.current:hover { text-decoration: none; }
+    .breadcrumb-sep { color: #bbb; }
+
+    /* ── File list ── */
+    .file-list { list-style: none; }
+    .file-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .file-list li:hover { background: #f5f5ff; }
+    .file-list li + li { border-top: 1px solid #f0f0f0; }
+
+    .item-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .item-name { flex: 1; font-size: 0.9rem; }
+    .item-name.folder { font-weight: 500; }
+
+    .btn-transcribe {
+      padding: 6px 14px;
+      background: #5b5ef4;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-transcribe:hover { background: #4547d4; }
+    .btn-transcribe:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .empty-msg {
+      color: #999;
+      font-size: 0.875rem;
+      padding: 16px 8px;
+      text-align: center;
+    }
+
+    .loading-msg {
+      color: #888;
+      font-size: 0.875rem;
+      padding: 16px 8px;
+      text-align: center;
+    }
+
+    /* ── Progress ── */
+    #progress-section { display: none; margin-top: 4px; }
+
+    .selected-file {
+      font-size: 0.82rem;
+      color: #555;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #f8f8ff;
+      border-radius: 6px;
+      border-left: 3px solid #5b5ef4;
+    }
+
+    .steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 8px;
+    }
+    .step {
+      flex: 1;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #bbb;
+      padding-bottom: 4px;
+    }
+    .step.active { color: #5b5ef4; font-weight: 600; }
+    .step.done { color: #22c55e; }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: #eee;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #5b5ef4;
+      border-radius: 99px;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+    .progress-message {
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+    }
+
+    /* ── Error ── */
+    #error-box {
+      display: none;
+      margin-top: 16px;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.875rem;
+    }
+
+    /* ── Results ── */
+    #result-section { display: none; }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .result-header h2 { font-size: 1rem; font-weight: 600; }
+
+    .action-buttons { display: flex; gap: 8px; }
+
+    button.btn-secondary {
+      padding: 8px 16px;
+      background: #f0f0f0;
+      color: #333;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.btn-secondary:hover { background: #e4e4e4; }
+
+    button.btn-primary {
+      padding: 8px 16px;
+      background: #5b5ef4;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.btn-primary:hover { background: #4547d4; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      font-size: 0.75rem;
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0 10px 8px;
+    }
+    td {
+      padding: 6px 10px;
+      border-top: 1px solid #f0f0f0;
+      vertical-align: top;
+    }
+    .ts-cell {
+      width: 68px;
+      color: #5b5ef4;
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      white-space: nowrap;
+      padding-top: 10px;
+    }
+    .text-cell { font-size: 0.9rem; line-height: 1.5; }
+    .text-cell[contenteditable="true"] {
+      outline: none;
+      border-radius: 4px;
+      padding: 4px 6px;
+      transition: background 0.15s;
+    }
+    .text-cell[contenteditable="true"]:focus { background: #f0f0ff; }
+
+    .copy-toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1a1a;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 99px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+    .copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+  <h1>Video Transkription</h1>
+  <p class="subtitle">Video auswählen → Transkript erhalten</p>
+
+  <!-- File browser -->
+  <div class="card">
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <ul class="file-list" id="file-list">
+      <li><span class="loading-msg">Lade Ordner…</span></li>
+    </ul>
+  </div>
+
+  <!-- Progress -->
+  <div class="card" id="progress-section">
+    <div class="selected-file" id="selected-file-name"></div>
+    <div class="steps">
+      <div class="step" data-step="downloading">Download</div>
+      <div class="step" data-step="extracting">Audio</div>
+      <div class="step" data-step="uploading">Upload</div>
+      <div class="step" data-step="transcribing">Transkription</div>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-message" id="progress-message">Starte…</div>
+    <div id="error-box"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="card" id="result-section">
+    <div class="result-header">
+      <h2>Transkript</h2>
+      <div class="action-buttons">
+        <button class="btn-secondary" onclick="downloadTxt()">Herunterladen (.txt)</button>
+        <button class="btn-primary" onclick="copyAll()">Alles kopieren</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Zeit</th><th>Text</th></tr>
+      </thead>
+      <tbody id="transcript-body"></tbody>
+    </table>
+  </div>
+
+  <div class="copy-toast" id="copy-toast">Kopiert!</div>
+
+  <script>
+    let transcriptData = [];
+    let activeJobId = null;
+    let activeFileId = null;
+
+    // ── Breadcrumb state ──────────────────────────────────────────────────────
+    // Stack of { id, name } — index 0 is root
+    let navStack = [];
+
+    // ── Browse ────────────────────────────────────────────────────────────────
+    async function browse(folderId, folderName) {
+      if (folderId === null) {
+        // root
+        navStack = [{ id: null, name: 'Alle Ordner' }];
+      } else {
+        // Check if navigating back to an ancestor
+        const idx = navStack.findIndex(n => n.id === folderId);
+        if (idx >= 0) {
+          navStack = navStack.slice(0, idx + 1);
+        } else {
+          navStack.push({ id: folderId, name: folderName });
+        }
+      }
+
+      renderBreadcrumb();
+      document.getElementById('file-list').innerHTML =
+        '<li><span class="loading-msg">Lade…</span></li>';
+
+      const query = folderId ? `?folderId=${folderId}` : '';
+      try {
+        const res = await fetch(`/api/browse${query}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        renderFileList(data.items);
+      } catch (err) {
+        document.getElementById('file-list').innerHTML =
+          `<li><span class="empty-msg">Fehler: ${escapeHtml(err.message)}</span></li>`;
+      }
+    }
+
+    function renderBreadcrumb() {
+      const bc = document.getElementById('breadcrumb');
+      bc.innerHTML = '';
+      navStack.forEach((item, i) => {
+        const span = document.createElement('span');
+        span.className = 'breadcrumb-item' + (i === navStack.length - 1 ? ' current' : '');
+        span.textContent = item.name;
+        if (i < navStack.length - 1) {
+          span.onclick = () => browse(item.id, item.name);
+        }
+        bc.appendChild(span);
+        if (i < navStack.length - 1) {
+          const sep = document.createElement('span');
+          sep.className = 'breadcrumb-sep';
+          sep.textContent = ' › ';
+          bc.appendChild(sep);
+        }
+      });
+    }
+
+    function renderFileList(items) {
+      const ul = document.getElementById('file-list');
+      ul.innerHTML = '';
+
+      if (items.length === 0) {
+        ul.innerHTML = '<li><span class="empty-msg">Keine Videos in diesem Ordner.</span></li>';
+        return;
+      }
+
+      items.forEach(item => {
+        const li = document.createElement('li');
+
+        const icon = document.createElement('span');
+        icon.className = 'item-icon';
+        icon.textContent = item.type === 'folder' ? '📁' : '🎬';
+
+        const name = document.createElement('span');
+        name.className = 'item-name' + (item.type === 'folder' ? ' folder' : '');
+        name.textContent = item.name;
+
+        li.appendChild(icon);
+        li.appendChild(name);
+
+        if (item.type === 'folder') {
+          li.onclick = () => browse(item.id, item.name);
+        } else {
+          const btn = document.createElement('button');
+          btn.className = 'btn-transcribe';
+          btn.textContent = 'Transkribieren';
+          btn.dataset.fileId = item.id;
+          btn.dataset.fileName = item.name;
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            startTranscription(item.id, item.name);
+          };
+          li.appendChild(btn);
+          li.onclick = () => startTranscription(item.id, item.name);
+        }
+
+        ul.appendChild(li);
+      });
+    }
+
+    // ── Transcription ─────────────────────────────────────────────────────────
+    async function startTranscription(fileId, fileName) {
+      if (activeJobId) return; // already running
+
+      activeFileId = fileId;
+      document.getElementById('selected-file-name').textContent = '🎬 ' + fileName;
+      document.getElementById('progress-section').style.display = 'block';
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('error-box').style.display = 'none';
+      transcriptData = [];
+      setProgress('downloading', 0, 'Starte…');
+
+      // Disable all transcribe buttons
+      document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = true);
+
+      const driveUrl = `https://drive.google.com/file/d/${fileId}/view`;
+
+      let jobId;
+      try {
+        const res = await fetch('/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: driveUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'Unbekannter Fehler'); return; }
+        jobId = data.jobId;
+        activeJobId = jobId;
+      } catch (err) {
+        showError('Server nicht erreichbar.');
+        return;
+      }
+
+      const evtSource = new EventSource(`/progress/${jobId}`);
+
+      evtSource.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === 'progress') {
+          setProgress(msg.step, msg.pct, msg.message);
+        }
+        if (msg.type === 'done') {
+          evtSource.close();
+          activeJobId = null;
+          document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
+          setProgress('transcribing', 100, 'Fertig!');
+          renderTranscript(msg.transcript);
+        }
+        if (msg.type === 'error') {
+          evtSource.close();
+          activeJobId = null;
+          document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
+          showError(msg.error);
+        }
+      };
+
+      evtSource.onerror = () => {
+        evtSource.close();
+        activeJobId = null;
+        document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
+        showError('Verbindung zum Server unterbrochen.');
+      };
+    }
+
+    function setProgress(step, pct, message) {
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-message').textContent = message;
+      const stepOrder = ['downloading', 'extracting', 'uploading', 'transcribing'];
+      const currentIdx = stepOrder.indexOf(step);
+      document.querySelectorAll('.step').forEach((el, i) => {
+        el.classList.remove('active', 'done');
+        if (i < currentIdx) el.classList.add('done');
+        else if (i === currentIdx) el.classList.add('active');
+      });
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      box.textContent = 'Fehler: ' + msg;
+      box.style.display = 'block';
+    }
+
+    function renderTranscript(data) {
+      transcriptData = data;
+      const tbody = document.getElementById('transcript-body');
+      tbody.innerHTML = '';
+      data.forEach((row, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="ts-cell">${escapeHtml(row.timestamp)}</td>
+          <td class="text-cell" contenteditable="true" data-index="${i}"
+            oninput="transcriptData[${i}].text = this.textContent"
+          >${escapeHtml(row.text)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('result-section').style.display = 'block';
+      document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function buildFullText() {
+      return transcriptData.map(r => `[${r.timestamp}] ${r.text}`).join('\n');
+    }
+
+    async function copyAll() {
+      await navigator.clipboard.writeText(buildFullText());
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    function downloadTxt() {
+      const blob = new Blob([buildFullText()], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'transkript.txt';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    browse(null, 'Alle Ordner');
+  </script>
+</body>
+</html>
