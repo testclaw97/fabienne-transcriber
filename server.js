@@ -379,6 +379,8 @@ async function browseDriveFolder(folderId) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
+app.get('/health', (req, res) => res.send('ok'));
+
 app.get('/api/browse', async (req, res) => {
   const folderId = req.query.folderId || ROOT_FOLDER_ID;
   try {
