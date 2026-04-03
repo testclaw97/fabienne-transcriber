@@ -53,6 +53,21 @@ function notifyClients(jobId, data) {
 
 // ── Google Drive download ─────────────────────────────────────────────────────
 
+async function getFileSizeBytes(fileId) {
+  const url = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0&confirm=t`;
+  try {
+    const response = await axios.head(url, {
+      timeout: 10_000,
+      maxRedirects: 10,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    const len = response.headers['content-length'];
+    return len ? parseInt(len, 10) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function downloadFromDrive(fileId, destPath) {
   // drive.usercontent.google.com works for large public files without cookie dance
   const url = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0&confirm=t`;
@@ -220,7 +235,18 @@ async function processJob(jobId, fileId) {
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    notifyClients(jobId, { type: 'progress', step: 'downloading', pct: 0, message: 'Lade Video herunter…' });
+    // Check file size and warn before starting
+    const sizeBytes = await getFileSizeBytes(fileId);
+    const sizeMB = sizeBytes ? Math.round(sizeBytes / 1024 / 1024) : null;
+    if (sizeBytes && sizeBytes > 500 * 1024 * 1024) {
+      throw new Error(
+        `Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 500 MB) und versuche es erneut.`
+      );
+    }
+    const downloadMsg = sizeMB && sizeMB > 100
+      ? `Lade Video herunter… (${sizeMB} MB — das dauert einige Minuten, bitte warten)`
+      : 'Lade Video herunter…';
+    notifyClients(jobId, { type: 'progress', step: 'downloading', pct: 0, message: downloadMsg });
     await downloadFromDrive(fileId, videoPath);
 
     notifyClients(jobId, { type: 'progress', step: 'extracting', pct: 20, message: 'Extrahiere Audio…' });
