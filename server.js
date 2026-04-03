@@ -78,7 +78,7 @@ async function downloadFromDrive(fileId, destPath) {
     url,
     responseType: 'stream',
     maxRedirects: 10,
-    timeout: 300_000, // 5 min download timeout
+    timeout: 1_200_000, // 20 min download timeout
     headers: { 'User-Agent': 'Mozilla/5.0' },
   });
 
@@ -278,13 +278,13 @@ async function processJob(jobId, fileId) {
     // Check file size and warn before starting
     const sizeBytes = await getFileSizeBytes(fileId);
     const sizeMB = sizeBytes ? Math.round(sizeBytes / 1024 / 1024) : null;
-    if (sizeBytes && sizeBytes > 500 * 1024 * 1024) {
+    if (sizeBytes && sizeBytes > 2000 * 1024 * 1024) {
       throw new Error(
-        `Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 500 MB) und versuche es erneut.`
+        `Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 2 GB) und versuche es erneut.`
       );
     }
-    const downloadMsg = sizeMB && sizeMB > 100
-      ? `Lade Video herunter… (${sizeMB} MB — das dauert einige Minuten, bitte warten)`
+    const downloadMsg = sizeMB && sizeMB > 200
+      ? `Lade Video herunter… (${sizeMB} MB — das kann 10–15 Minuten dauern, bitte warten)`
       : 'Lade Video herunter…';
     notifyClients(jobId, { type: 'progress', step: 'downloading', pct: 0, message: downloadMsg });
     await downloadFromDrive(fileId, videoPath);
