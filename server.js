@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 const FormData = require('form-data');
 const { spawn } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -86,7 +87,7 @@ async function downloadFromDrive(fileId, destPath) {
 
 function extractAudio(videoPath, audioPath) {
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
+    const ffmpeg = spawn(ffmpegPath, [
       '-i', videoPath,
       '-vn',                  // no video
       '-acodec', 'libmp3lame',
