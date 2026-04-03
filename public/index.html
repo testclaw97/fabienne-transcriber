@@ -40,11 +40,7 @@
       margin-bottom: 16px;
       font-size: 0.85rem;
     }
-    .breadcrumb-item {
-      color: #5b5ef4;
-      cursor: pointer;
-      font-weight: 500;
-    }
+    .breadcrumb-item { color: #5b5ef4; cursor: pointer; font-weight: 500; }
     .breadcrumb-item:hover { text-decoration: underline; }
     .breadcrumb-item.current { color: #333; cursor: default; font-weight: 600; }
     .breadcrumb-item.current:hover { text-decoration: none; }
@@ -63,7 +59,6 @@
     }
     .file-list li:hover { background: #f5f5ff; }
     .file-list li + li { border-top: 1px solid #f0f0f0; }
-
     .item-icon { font-size: 1.1rem; flex-shrink: 0; }
     .item-name { flex: 1; font-size: 0.9rem; }
     .item-name.folder { font-weight: 500; }
@@ -84,23 +79,11 @@
     .btn-transcribe:hover { background: #4547d4; }
     .btn-transcribe:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .empty-msg {
-      color: #999;
-      font-size: 0.875rem;
-      padding: 16px 8px;
-      text-align: center;
-    }
-
-    .loading-msg {
-      color: #888;
-      font-size: 0.875rem;
-      padding: 16px 8px;
-      text-align: center;
-    }
+    .empty-msg { color: #999; font-size: 0.875rem; padding: 16px 8px; text-align: center; }
+    .loading-msg { color: #888; font-size: 0.875rem; padding: 16px 8px; text-align: center; }
 
     /* ── Progress ── */
     #progress-section { display: none; margin-top: 4px; }
-
     .selected-file {
       font-size: 0.82rem;
       color: #555;
@@ -110,41 +93,13 @@
       border-radius: 6px;
       border-left: 3px solid #5b5ef4;
     }
-
-    .steps {
-      display: flex;
-      gap: 0;
-      margin-bottom: 8px;
-    }
-    .step {
-      flex: 1;
-      text-align: center;
-      font-size: 0.75rem;
-      color: #bbb;
-      padding-bottom: 4px;
-    }
+    .steps { display: flex; gap: 0; margin-bottom: 8px; }
+    .step { flex: 1; text-align: center; font-size: 0.75rem; color: #bbb; padding-bottom: 4px; }
     .step.active { color: #5b5ef4; font-weight: 600; }
     .step.done { color: #22c55e; }
-
-    .progress-bar-bg {
-      height: 6px;
-      background: #eee;
-      border-radius: 99px;
-      overflow: hidden;
-      margin-bottom: 10px;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      background: #5b5ef4;
-      border-radius: 99px;
-      transition: width 0.5s ease;
-      width: 0%;
-    }
-    .progress-message {
-      font-size: 0.85rem;
-      color: #666;
-      text-align: center;
-    }
+    .progress-bar-bg { height: 6px; background: #eee; border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+    .progress-bar-fill { height: 100%; background: #5b5ef4; border-radius: 99px; transition: width 0.5s ease; width: 0%; }
+    .progress-message { font-size: 0.85rem; color: #666; text-align: center; }
 
     /* ── Error ── */
     #error-box {
@@ -158,47 +113,110 @@
       font-size: 0.875rem;
     }
 
-    /* ── Results ── */
-    #result-section { display: none; }
+    /* ── Result: two-panel editor ── */
+    #result-section {
+      display: none;
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 16px;
+    }
+
+    .editor-layout {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    /* Left: video panel */
+    .video-panel {
+      width: 280px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      overflow: hidden;
+      position: sticky;
+      top: 20px;
+    }
+    .video-panel iframe {
+      display: block;
+      width: 100%;
+      height: 158px; /* 16:9 at 280px wide ≈ 144p */
+      border: none;
+      background: #000;
+    }
+    .video-title {
+      padding: 10px 12px;
+      font-size: 0.78rem;
+      color: #555;
+      border-top: 1px solid #f0f0f0;
+      line-height: 1.4;
+    }
+
+    /* Right: transcript panel */
+    .transcript-panel {
+      flex: 1;
+      min-width: 0;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 20px 24px;
+    }
 
     .result-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 14px;
+      align-items: flex-start;
+      margin-bottom: 16px;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
     }
     .result-header h2 { font-size: 1rem; font-weight: 600; }
 
-    .action-buttons { display: flex; gap: 8px; }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-    button.btn-secondary {
-      padding: 8px 16px;
+    button.btn-tool {
+      padding: 6px 12px;
       background: #f0f0f0;
       color: #333;
       border: none;
-      border-radius: 8px;
-      font-size: 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.15s;
+      white-space: nowrap;
     }
-    button.btn-secondary:hover { background: #e4e4e4; }
+    button.btn-tool:hover { background: #e0e0e0; }
+    button.btn-tool.active { background: #5b5ef4; color: #fff; }
 
-    button.btn-primary {
-      padding: 8px 16px;
-      background: #5b5ef4;
+    button.btn-save {
+      padding: 6px 12px;
+      background: #22c55e;
       color: #fff;
       border: none;
-      border-radius: 8px;
-      font-size: 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.15s;
+      white-space: nowrap;
     }
-    button.btn-primary:hover { background: #4547d4; }
+    button.btn-save:hover { background: #16a34a; }
 
+    .toolbar-sep {
+      width: 1px;
+      height: 20px;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+
+    /* Transcript table */
     table { width: 100%; border-collapse: collapse; }
     th {
       text-align: left;
@@ -222,7 +240,9 @@
       font-weight: 600;
       white-space: nowrap;
       padding-top: 10px;
+      cursor: pointer;
     }
+    .ts-cell:hover { color: #4547d4; text-decoration: underline; }
     .text-cell { font-size: 0.9rem; line-height: 1.5; }
     .text-cell[contenteditable="true"] {
       outline: none;
@@ -232,6 +252,31 @@
     }
     .text-cell[contenteditable="true"]:focus { background: #f0f0ff; }
 
+    .del-cell { width: 32px; padding: 6px 4px; text-align: center; }
+    .btn-delete {
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      transition: color 0.12s, background 0.12s;
+    }
+    .btn-delete:hover { color: #ef4444; background: #fef2f2; }
+
+    /* Timestamps hidden */
+    .timestamps-hidden .ts-col { display: none; }
+    .timestamps-hidden .ts-cell { display: none; }
+
+    /* Font sizes */
+    .font-sm .text-cell { font-size: 0.78rem; }
+    .font-md .text-cell { font-size: 0.9rem; }
+    .font-lg .text-cell { font-size: 1.05rem; }
+    .font-xl .text-cell { font-size: 1.2rem; }
+
+    /* Toast */
     .copy-toast {
       position: fixed;
       bottom: 30px;
@@ -247,6 +292,12 @@
       pointer-events: none;
     }
     .copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Responsive: stack on small screens */
+    @media (max-width: 700px) {
+      .editor-layout { flex-direction: column; }
+      .video-panel { width: 100%; position: static; }
+    }
   </style>
 </head>
 <body>
@@ -278,21 +329,45 @@
     <div id="error-box"></div>
   </div>
 
-  <!-- Result -->
-  <div class="card" id="result-section">
-    <div class="result-header">
-      <h2>Transkript</h2>
-      <div class="action-buttons">
-        <button class="btn-secondary" onclick="downloadTxt()">Herunterladen (.txt)</button>
-        <button class="btn-primary" onclick="copyAll()">Alles kopieren</button>
+  <!-- Result: two-panel editor -->
+  <div id="result-section">
+    <div class="editor-layout">
+
+      <!-- Left: video preview -->
+      <div class="video-panel">
+        <iframe id="video-preview" src="" allowfullscreen></iframe>
+        <div class="video-title" id="video-title"></div>
       </div>
+
+      <!-- Right: transcript editor -->
+      <div class="transcript-panel" id="transcript-table-wrap">
+        <div class="result-header">
+          <h2>Transkript</h2>
+          <div class="toolbar">
+            <button class="btn-tool active" id="ts-toggle-btn" onclick="toggleTimestamps()">Zeitstempel</button>
+            <div class="toolbar-sep"></div>
+            <button class="btn-tool" onclick="setFont('sm')">A−</button>
+            <button class="btn-tool active" id="font-md-btn" onclick="setFont('md')">A</button>
+            <button class="btn-tool" onclick="setFont('lg')">A+</button>
+            <button class="btn-tool" onclick="setFont('xl')">A++</button>
+            <div class="toolbar-sep"></div>
+            <button class="btn-tool" onclick="copyAll()">Kopieren</button>
+            <button class="btn-save" onclick="downloadTxt()">Notizen speichern</button>
+          </div>
+        </div>
+        <table class="font-md" id="transcript-table">
+          <thead>
+            <tr>
+              <th class="ts-col">Zeit</th>
+              <th>Text</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="transcript-body"></tbody>
+        </table>
+      </div>
+
     </div>
-    <table>
-      <thead>
-        <tr><th>Zeit</th><th>Text</th></tr>
-      </thead>
-      <tbody id="transcript-body"></tbody>
-    </table>
   </div>
 
   <div class="copy-toast" id="copy-toast">Kopiert!</div>
@@ -301,18 +376,18 @@
     let transcriptData = [];
     let activeJobId = null;
     let activeFileId = null;
+    let activeFileName = '';
+    let showTimestamps = true;
+    let currentFont = 'md';
 
     // ── Breadcrumb state ──────────────────────────────────────────────────────
-    // Stack of { id, name } — index 0 is root
     let navStack = [];
 
     // ── Browse ────────────────────────────────────────────────────────────────
     async function browse(folderId, folderName) {
       if (folderId === null) {
-        // root
         navStack = [{ id: null, name: 'Alle Ordner' }];
       } else {
-        // Check if navigating back to an ancestor
         const idx = navStack.findIndex(n => n.id === folderId);
         if (idx >= 0) {
           navStack = navStack.slice(0, idx + 1);
@@ -402,9 +477,10 @@
 
     // ── Transcription ─────────────────────────────────────────────────────────
     async function startTranscription(fileId, fileName) {
-      if (activeJobId) return; // already running
+      if (activeJobId) return;
 
       activeFileId = fileId;
+      activeFileName = fileName;
       document.getElementById('selected-file-name').textContent = '🎬 ' + fileName;
       document.getElementById('progress-section').style.display = 'block';
       document.getElementById('result-section').style.display = 'none';
@@ -412,7 +488,6 @@
       transcriptData = [];
       setProgress('downloading', 0, 'Starte…');
 
-      // Disable all transcribe buttons
       document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = true);
 
       const driveUrl = `https://drive.google.com/file/d/${fileId}/view`;
@@ -437,10 +512,7 @@
 
       evtSource.onmessage = (e) => {
         const msg = JSON.parse(e.data);
-
-        if (msg.type === 'progress') {
-          setProgress(msg.step, msg.pct, msg.message);
-        }
+        if (msg.type === 'progress') setProgress(msg.step, msg.pct, msg.message);
         if (msg.type === 'done') {
           evtSource.close();
           activeJobId = null;
@@ -484,28 +556,90 @@
 
     function renderTranscript(data) {
       transcriptData = data;
+
+      // Set video preview
+      document.getElementById('video-preview').src =
+        `https://drive.google.com/file/d/${activeFileId}/preview`;
+      document.getElementById('video-title').textContent = activeFileName;
+
       const tbody = document.getElementById('transcript-body');
       tbody.innerHTML = '';
+
       data.forEach((row, i) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="ts-cell">${escapeHtml(row.timestamp)}</td>
-          <td class="text-cell" contenteditable="true" data-index="${i}"
-            oninput="transcriptData[${i}].text = this.textContent"
-          >${escapeHtml(row.text)}</td>
-        `;
-        tbody.appendChild(tr);
+        appendRow(row, i, tbody);
       });
+
       document.getElementById('result-section').style.display = 'block';
       document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function escapeHtml(str) {
-      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    function appendRow(row, i, tbody) {
+      const tr = document.createElement('tr');
+      tr.dataset.index = i;
+
+      const tsCell = document.createElement('td');
+      tsCell.className = 'ts-cell';
+      tsCell.textContent = row.timestamp;
+
+      const textCell = document.createElement('td');
+      textCell.className = 'text-cell';
+      textCell.contentEditable = 'true';
+      textCell.textContent = row.text;
+      textCell.oninput = () => { transcriptData[i].text = textCell.textContent; };
+
+      const delCell = document.createElement('td');
+      delCell.className = 'del-cell';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-delete';
+      delBtn.textContent = '×';
+      delBtn.title = 'Zeile löschen';
+      delBtn.onclick = () => deleteRow(tr, i);
+      delCell.appendChild(delBtn);
+
+      tr.appendChild(tsCell);
+      tr.appendChild(textCell);
+      tr.appendChild(delCell);
+      tbody.appendChild(tr);
     }
 
+    function deleteRow(tr, index) {
+      transcriptData[index] = null;
+      tr.remove();
+    }
+
+    // ── Toolbar controls ──────────────────────────────────────────────────────
+    function toggleTimestamps() {
+      showTimestamps = !showTimestamps;
+      const table = document.getElementById('transcript-table');
+      table.classList.toggle('timestamps-hidden', !showTimestamps);
+      const btn = document.getElementById('ts-toggle-btn');
+      btn.classList.toggle('active', showTimestamps);
+    }
+
+    const fontSizes = ['sm', 'md', 'lg', 'xl'];
+    function setFont(size) {
+      const table = document.getElementById('transcript-table');
+      fontSizes.forEach(s => table.classList.remove('font-' + s));
+      table.classList.add('font-' + size);
+      currentFont = size;
+      document.querySelectorAll('.btn-tool').forEach(b => {
+        if (b.id === 'ts-toggle-btn') return;
+        b.classList.remove('active');
+      });
+      // find the button that matches
+      const labels = { sm: 'A−', md: 'A', lg: 'A+', xl: 'A++' };
+      document.querySelectorAll('.btn-tool').forEach(b => {
+        if (b.textContent === labels[size]) b.classList.add('active');
+      });
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
     function buildFullText() {
-      return transcriptData.map(r => `[${r.timestamp}] ${r.text}`).join('\n');
+      const rows = transcriptData.filter(r => r !== null);
+      if (showTimestamps) {
+        return rows.map(r => `[${r.timestamp}] ${r.text}`).join('\n');
+      }
+      return rows.map(r => r.text).join('\n');
     }
 
     async function copyAll() {
@@ -519,9 +653,13 @@
       const blob = new Blob([buildFullText()], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'transkript.txt';
+      a.download = (activeFileName || 'transkript') + ' – Notizen.txt';
       a.click();
       URL.revokeObjectURL(a.href);
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     // ── Init ──────────────────────────────────────────────────────────────────
