@@ -525,6 +525,14 @@
   <h1>Video Transkription</h1>
   <p class="subtitle">Video auswählen → Transkript erhalten</p>
 
+  <!-- URL paste input -->
+  <div class="card" id="url-input-card">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" id="drive-url-input" placeholder="Google Drive Video-URL einfügen… (drive.google.com/file/d/...)" style="flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
+      <button onclick="startTranscriptionFromUrl()" style="padding:10px 18px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">▶ Starten</button>
+    </div>
+  </div>
+
   <!-- File browser -->
   <div class="card">
     <div class="breadcrumb" id="breadcrumb"></div>
@@ -1002,7 +1010,8 @@
       ul.innerHTML = '';
 
       if (items.length === 0) {
-        ul.innerHTML = '<li><span class="empty-msg">Keine Videos in diesem Ordner.</span></li>';
+        ul.innerHTML = '<li><span class="empty-msg">Keine Videos gefunden — bitte Video-URL oben direkt einfügen ↑</span></li>';
+        document.getElementById('drive-url-input').focus();
         return;
       }
 
@@ -1039,6 +1048,24 @@
         ul.appendChild(li);
       });
     }
+
+    // ── Transcription from pasted URL ─────────────────────────────────────────
+    function startTranscriptionFromUrl() {
+      const input = document.getElementById('drive-url-input');
+      const url = (input.value || '').trim();
+      if (!url) { input.focus(); return; }
+      const m = url.match(/\/d\/([a-zA-Z0-9_-]{25,})/);
+      if (!m) { alert('Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...'); return; }
+      const fileId = m[1];
+      const fileName = 'Video';
+      input.value = '';
+      startTranscription(fileId, fileName);
+    }
+
+    // Allow Enter key in URL input
+    document.getElementById('drive-url-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startTranscriptionFromUrl();
+    });
 
     // ── Transcription ─────────────────────────────────────────────────────────
     async function startTranscription(fileId, fileName) {
