@@ -532,7 +532,8 @@
       <input type="text" id="drive-url-input" placeholder="https://drive.google.com/file/d/..." onkeydown="if(event.key==='Enter')startTranscriptionFromUrl()" style="flex:1;padding:12px 14px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
       <button onclick="startTranscriptionFromUrl()" style="padding:12px 22px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:1rem;white-space:nowrap;">▶ Starten</button>
     </div>
-    <p style="margin:8px 0 0;font-size:0.8rem;color:#999;">Rechtsklick auf Video in Google Drive → „Link kopieren" → hier einfügen</p>
+    <p id="url-error" style="margin:8px 0 0;font-size:0.85rem;color:#e53e3e;display:none;"></p>
+    <p style="margin:8px 0 0;font-size:0.8rem;color:#999;">Video in Drive anklicken → oben rechts „⋮" → „Link kopieren" → hier einfügen</p>
   </div>
 
   <!-- File browser (hidden — Drive API not configured) -->
@@ -1052,10 +1053,18 @@
     // ── Transcription from pasted URL ─────────────────────────────────────────
     function startTranscriptionFromUrl() {
       const input = document.getElementById('drive-url-input');
+      const errEl = document.getElementById('url-error');
       const url = (input.value || '').trim();
+      errEl.style.display = 'none';
       if (!url) { input.focus(); return; }
-      const m = url.match(/\/d\/([a-zA-Z0-9_-]{25,})/);
-      if (!m) { alert('Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...'); return; }
+      // Support /file/d/ID, /open?id=ID, /d/ID
+      const m = url.match(/\/d\/([a-zA-Z0-9_-]{25,})/) ||
+                url.match(/[?&]id=([a-zA-Z0-9_-]{25,})/);
+      if (!m) {
+        errEl.textContent = '❌ Ungültige URL. Bitte einen direkten Video-Link einfügen (nicht den Ordner-Link). In Drive: Video anklicken → Rechtsklick → „Link kopieren".';
+        errEl.style.display = 'block';
+        return;
+      }
       const fileId = m[1];
       const fileName = 'Video';
       input.value = '';
