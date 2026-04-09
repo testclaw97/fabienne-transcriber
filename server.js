@@ -226,6 +226,71 @@ function formatTranscript(gladiaResult) {
   }));
 }
 
+// ── DeepSeek AI Analysis ─────────────────────────────────────────────────────
+
+async function analyseWithDeepSeek(transcript) {
+  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+  
+  if (!DEEPSEEK_API_KEY) {
+    console.log('DEEPSEEK_API_KEY not set, skipping AI analysis');
+    return null;
+  }
+
+  try {
+    // Build the prompt with numbered segments
+    const segments = transcript.map((s, i) => ({
+      i,
+      ts: s.timestamp,
+      text: s.text
+    }));
+
+    const systemPrompt = 'You are a video transcript analyser. You will receive numbered transcript segments. Return ONLY valid JSON, no markdown, no explanation.';
+    
+    const userPrompt = `Analyse these transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). Here are the segments: ${JSON.stringify(segments)}`;
+
+    const response = await axios.post(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 4096,
+        temperature: 0.3
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 seconds timeout
+      }
+    );
+
+    const content = response.data.choices[0].message.content;
+    
+    // Try to parse the JSON response
+    try {
+      const parsed = JSON.parse(content);
+      
+      // Validate the structure
+      if (!parsed.paragraphs || !parsed.safety) {
+        console.log('DeepSeek response missing required fields');
+        return null;
+      }
+      
+      return parsed;
+    } catch (parseError) {
+      console.log('Failed to parse DeepSeek JSON response:', parseError.message);
+      return null;
+    }
+  } catch (error) {
+    console.log('DeepSeek API call failed:', error.message);
+    return null; // Silently fail, don't crash the job
+  }
+}
+
 // ── Groq Whisper fallback ─────────────────────────────────────────────────────
 
 async function transcribeWithGroq(audioPath) {
@@ -311,13 +376,17 @@ async function processJob(jobId, fileId) {
     }
     const fullText = transcript.map(t => `[${t.timestamp}] ${t.text}`).join('\n');
 
+    // AI Analysis with DeepSeek
+    notifyClients(jobId, { type: 'progress', step: 'ai_grouping', pct: 90, message: 'KI-Analyse läuft…' });
+    const aiGrouping = await analyseWithDeepSeek(transcript);
+
     const job = jobs.get(jobId);
     if (job) {
       job.status = 'done';
-      job.result = { transcript, fullText };
+      job.result = { transcript, fullText, aiGrouping };
     }
 
-    notifyClients(jobId, { type: 'done', transcript, fullText });
+    notifyClients(jobId, { type: 'done', transcript, fullText, aiGrouping });
   } catch (err) {
     console.error(`Job ${jobId} failed:`, err.message);
     const job = jobs.get(jobId);

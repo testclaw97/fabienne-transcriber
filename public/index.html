@@ -445,6 +445,7 @@
       <div class="step" data-step="extracting">Audio</div>
       <div class="step" data-step="uploading">Upload</div>
       <div class="step" data-step="transcribing">Transkription</div>
+      <div class="step" data-step="ai_grouping">KI-Analyse</div>
     </div>
     <div class="progress-bar-bg">
       <div class="progress-bar-fill" id="progress-fill"></div>
@@ -620,6 +621,10 @@
     let showTimestamps = true;
     let currentFont = 'md';
     
+    // AI Grouping variables
+    let lastAiGrouping = null;
+    let lastTranscript = null;
+    
     // Drag selection variables
     let isDragging = false;
     let dragStartRow = null;
@@ -636,6 +641,11 @@
       localStorage.setItem('fabienne_mode', currentMode);
       updateModeToggle();
       applyLanguage();
+      
+      // Re-render AI grouping with new language labels
+      if (lastAiGrouping && lastTranscript) {
+        renderAiGrouping(lastAiGrouping, lastTranscript);
+      }
     }
 
     function updateModeToggle() {
@@ -896,6 +906,8 @@
           activeJobId = null;
           document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
           setProgress('transcribing', 100, 'Fertig!');
+          lastAiGrouping = msg.aiGrouping || null;
+          lastTranscript = msg.transcript;
           renderTranscript(msg.transcript);
         }
         if (msg.type === 'error') {
@@ -917,7 +929,7 @@
     function setProgress(step, pct, message) {
       document.getElementById('progress-fill').style.width = pct + '%';
       document.getElementById('progress-message').textContent = translateText(message);
-      const stepOrder = ['downloading', 'extracting', 'uploading', 'transcribing'];
+      const stepOrder = ['downloading', 'extracting', 'uploading', 'transcribing', 'ai_grouping'];
       const currentIdx = stepOrder.indexOf(step);
       document.querySelectorAll('.step').forEach((el, i) => {
         el.classList.remove('active', 'done');
@@ -952,6 +964,94 @@
       
       // Initialize drag selection after rendering
       initDragSelection();
+      
+      // Render AI grouping if available
+      renderAiGrouping(lastAiGrouping, data);
+    }
+
+    function renderAiGrouping(aiGrouping, transcript) {
+      if (!aiGrouping) return;
+      
+      const tbody = document.getElementById('transcript-body');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      
+      // Clear any existing AI grouping markers
+      rows.forEach(row => {
+        if (row.classList.contains('ai-paragraph-header')) {
+          row.remove();
+        }
+        // Remove safety dots from timestamp cells
+        const tsCell = row.querySelector('.ts-cell');
+        if (tsCell) {
+          tsCell.textContent = tsCell.textContent.replace(/^[🟢🟡🔴]\s*/, '');
+        }
+      });
+      
+      // Re-index rows after removing headers
+      const currentRows = Array.from(tbody.querySelectorAll('tr'));
+      
+      // Add paragraph headers
+      if (aiGrouping.paragraphs) {
+        aiGrouping.paragraphs.forEach(paragraph => {
+          if (paragraph.segmentIndices && paragraph.segmentIndices.length > 0) {
+            const firstSegmentIndex = paragraph.segmentIndices[0];
+            // Find the row index for this segment
+            let targetRowIndex = -1;
+            for (let i = 0; i < currentRows.length; i++) {
+              const rowIndex = parseInt(currentRows[i].dataset.index);
+              if (rowIndex === firstSegmentIndex) {
+                targetRowIndex = i;
+                break;
+              }
+            }
+            
+            if (targetRowIndex >= 0) {
+              const headerRow = document.createElement('tr');
+              headerRow.className = 'ai-paragraph-header';
+              headerRow.style.backgroundColor = '#f0f9ff';
+              headerRow.style.borderLeft = '4px solid #5b5ef4';
+              
+              const headerCell = document.createElement('td');
+              headerCell.colSpan = 3;
+              headerCell.style.padding = '8px 12px';
+              headerCell.style.fontWeight = '600';
+              headerCell.style.fontSize = '0.85rem';
+              
+              // Use German label for client mode, English for editor mode
+              const label = currentMode === 'client' ? paragraph.labelDe : paragraph.labelEn;
+              headerCell.textContent = `📝 ${label}`;
+              
+              headerRow.appendChild(headerCell);
+              
+              // Insert before the target row
+              const targetRow = currentRows[targetRowIndex];
+              tbody.insertBefore(headerRow, targetRow);
+            }
+          }
+        });
+      }
+      
+      // Add safety dots to timestamp cells
+      if (aiGrouping.safety) {
+        const allRows = Array.from(tbody.querySelectorAll('tr'));
+        allRows.forEach(row => {
+          if (!row.classList.contains('ai-paragraph-header')) {
+            const rowIndex = parseInt(row.dataset.index);
+            if (rowIndex >= 0 && aiGrouping.safety[rowIndex.toString()]) {
+              const safety = aiGrouping.safety[rowIndex.toString()];
+              const tsCell = row.querySelector('.ts-cell');
+              if (tsCell) {
+                let dot = '';
+                if (safety === 'green') dot = '🟢 ';
+                else if (safety === 'yellow') dot = '🟡 ';
+                else if (safety === 'red') dot = '🔴 ';
+                
+                tsCell.textContent = dot + tsCell.textContent.replace(/^[🟢🟡🔴]\s*/, '');
+              }
+            }
+          }
+        });
+      }
     }
 
     function appendRow(row, i, tbody) {
