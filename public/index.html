@@ -523,22 +523,22 @@
   <button class="mode-toggle" id="mode-toggle">Client Mode</button>
 
   <h1>Video Transkription</h1>
-  <p class="subtitle">Video auswählen → Transkript erhalten</p>
+  <p class="subtitle">Google Drive Video-Link einfügen → Transkript erhalten</p>
 
   <!-- URL paste input -->
   <div class="card" id="url-input-card">
+    <p style="margin:0 0 10px;font-weight:600;font-size:0.95rem;">Video-URL einfügen</p>
     <div style="display:flex;gap:8px;align-items:center;">
-      <input type="text" id="drive-url-input" placeholder="Google Drive Video-URL einfügen… (drive.google.com/file/d/...)" onkeydown="if(event.key==='Enter')startTranscriptionFromUrl()" style="flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
-      <button onclick="startTranscriptionFromUrl()" style="padding:10px 18px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">▶ Starten</button>
+      <input type="text" id="drive-url-input" placeholder="https://drive.google.com/file/d/..." onkeydown="if(event.key==='Enter')startTranscriptionFromUrl()" style="flex:1;padding:12px 14px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
+      <button onclick="startTranscriptionFromUrl()" style="padding:12px 22px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:1rem;white-space:nowrap;">▶ Starten</button>
     </div>
+    <p style="margin:8px 0 0;font-size:0.8rem;color:#999;">Rechtsklick auf Video in Google Drive → „Link kopieren" → hier einfügen</p>
   </div>
 
-  <!-- File browser -->
-  <div class="card">
+  <!-- File browser (hidden — Drive API not configured) -->
+  <div style="display:none">
     <div class="breadcrumb" id="breadcrumb"></div>
-    <ul class="file-list" id="file-list">
-      <li><span class="loading-msg">Lade Ordner…</span></li>
-    </ul>
+    <ul class="file-list" id="file-list"></ul>
   </div>
 
   <!-- Progress -->
