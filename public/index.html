@@ -1294,10 +1294,30 @@
       }
     }
     
+    function showSafetyModal(onConfirm) {
+      const modal = document.getElementById('safety-modal');
+      document.getElementById('safety-modal-msg').textContent = currentMode === 'client'
+        ? 'Die KI hat diese Stelle als unsicher zum Schneiden markiert. Bist du sicher?'
+        : 'AI marked this as unsafe to cut. Are you sure?';
+      modal.style.display = 'flex';
+      document.getElementById('safety-modal-confirm').onclick = () => { modal.style.display = 'none'; onConfirm(); };
+      document.getElementById('safety-modal-cancel').onclick = () => { modal.style.display = 'none'; };
+    }
+
     function applyDecisionToSelected(decision) {
-      selectedRows.forEach(row => {
-        setDecision(row, decision);
-      });
+      if ((decision === 'cut' || decision === 'delete') && lastAiGrouping && lastAiGrouping.safety) {
+        const tbody = document.querySelector('#transcript-body');
+        const dataRows = Array.from(tbody.querySelectorAll('tr:not(.ai-paragraph-header)'));
+        const hasRed = selectedRows.some(row => {
+          const idx = dataRows.indexOf(row);
+          return idx !== -1 && lastAiGrouping.safety[String(idx)] === 'red';
+        });
+        if (hasRed) {
+          showSafetyModal(() => { selectedRows.forEach(row => setDecision(row, decision)); clearSelection(); });
+          return;
+        }
+      }
+      selectedRows.forEach(row => setDecision(row, decision));
       clearSelection();
     }
     
@@ -1335,5 +1355,15 @@
     // Initialize drag selection when transcript is rendered
     // We'll call this from renderTranscript
   </script>
+
+  <div id="safety-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <p id="safety-modal-msg" style="margin:0 0 20px;font-size:1rem;line-height:1.5;"></p>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button id="safety-modal-cancel" style="padding:8px 18px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:#fff;">Abbrechen</button>
+        <button id="safety-modal-confirm" style="padding:8px 18px;border:none;border-radius:8px;cursor:pointer;background:#e53e3e;color:#fff;font-weight:600;">Bestätigen</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
