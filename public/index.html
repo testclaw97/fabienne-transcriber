@@ -252,7 +252,7 @@
     }
     .text-cell[contenteditable="true"]:focus { background: #f0f0ff; }
 
-    .del-cell { width: 32px; padding: 6px 4px; text-align: center; }
+    .del-cell { width: 120px; padding: 6px 4px; text-align: center; }
     .btn-delete {
       background: none;
       border: none;
@@ -265,6 +265,88 @@
       transition: color 0.12s, background 0.12s;
     }
     .btn-delete:hover { color: #ef4444; background: #fef2f2; }
+    
+    /* Decision buttons */
+    .decision-buttons {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+    }
+    .btn-decision {
+      background: #f0f0f0;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      line-height: 1;
+    }
+    .btn-decision:hover {
+      transform: translateY(-1px);
+    }
+    .btn-keep {
+      color: #166534;
+    }
+    .btn-keep:hover, .btn-keep.active {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .btn-cut {
+      color: #854d0e;
+    }
+    .btn-cut:hover, .btn-cut.active {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+    .btn-delete-btn {
+      color: #7f1d1d;
+    }
+    .btn-delete-btn:hover, .btn-delete-btn.active {
+      background: #fee2e2;
+      color: #7f1d1d;
+    }
+    
+    /* Decision states for rows */
+    tr[data-decision="keep"] {
+      background-color: #f0fdf4 !important;
+    }
+    tr[data-decision="cut"] {
+      background-color: #fefce8 !important;
+    }
+    tr[data-decision="delete"] {
+      background-color: #fef2f2 !important;
+    }
+    
+    /* Selection for drag */
+    tr.selected {
+      background-color: #e0f2fe !important;
+    }
+    
+    /* Floating toolbar for drag selection */
+    .floating-toolbar {
+      position: fixed;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      padding: 8px 12px;
+      display: flex;
+      gap: 6px;
+      z-index: 1000;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+    .floating-toolbar.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: all;
+    }
+    .floating-toolbar .btn-decision {
+      font-size: 0.9rem;
+      padding: 6px 10px;
+    }
 
     /* Timestamps hidden */
     .timestamps-hidden .ts-col { display: none; }
@@ -293,6 +375,34 @@
     }
     .copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* Mode Toggle */
+    .mode-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 99px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #5b5ef4;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .mode-toggle:hover {
+      background: #f5f5ff;
+      border-color: #5b5ef4;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .mode-toggle:active {
+      transform: translateY(0);
+    }
+
     /* Responsive: stack on small screens */
     @media (max-width: 800px) {
       .editor-layout { flex-direction: column; }
@@ -313,6 +423,8 @@
   </style>
 </head>
 <body>
+
+  <button class="mode-toggle" id="mode-toggle">Client Mode</button>
 
   <h1>Video Transkription</h1>
   <p class="subtitle">Video auswählen → Transkript erhalten</p>
@@ -383,22 +495,276 @@
   </div>
 
   <div class="copy-toast" id="copy-toast">Kopiert!</div>
+  
+  <!-- Floating toolbar for drag selection -->
+  <div class="floating-toolbar" id="floating-toolbar">
+    <button class="btn-decision btn-keep" onclick="applyDecisionToSelected('keep')">✅ Keep</button>
+    <button class="btn-decision btn-cut" onclick="applyDecisionToSelected('cut')">✂️ Cut</button>
+    <button class="btn-decision btn-delete-btn" onclick="applyDecisionToSelected('delete')">🗑️ Delete</button>
+  </div>
 
   <script>
+    // ── Mode & Language Management ────────────────────────────────────────────
+    let currentMode = localStorage.getItem('fabienne_mode') || 'client'; // 'client' or 'editor'
+    
+    // Language mappings
+    const translations = {
+      client: {
+        // Static text
+        'Video Transkription': 'Video Transkription',
+        'Video auswählen → Transkript erhalten': 'Video auswählen → Transkript erhalten',
+        'Lade Ordner…': 'Lade Ordner…',
+        'Download': 'Download',
+        'Audio': 'Audio',
+        'Upload': 'Upload',
+        'Transkription': 'Transkription',
+        'Starte…': 'Starte…',
+        'Transkript': 'Transkript',
+        'Zeitstempel': 'Zeitstempel',
+        'Kopieren': 'Kopieren',
+        'Notizen speichern': 'Notizen speichern',
+        'Zeit': 'Zeit',
+        'Text': 'Text',
+        'Lade…': 'Lade…',
+        'Keine Videos in diesem Ordner.': 'Keine Videos in diesem Ordner.',
+        'Transkribieren': 'Transkribieren',
+        'Behalten': 'Behalten',
+        'Ausschneiden': 'Ausschneiden',
+        'Löschen': 'Löschen',
+        'Alle Ordner': 'Alle Ordner',
+        ' – Notizen.txt': ' – Notizen.txt',
+        
+        // Dynamic text patterns
+        'Fehler: ': 'Fehler: ',
+        'Starte…': 'Starte…',
+        'Fertig!': 'Fertig!',
+        'Server nicht erreichbar.': 'Server nicht erreichbar.',
+        'Verbindung zum Server unterbrochen.': 'Verbindung zum Server unterbrochen.',
+        'Unbekannter Fehler': 'Unbekannter Fehler',
+        
+        // Mode toggle button
+        'Client Mode': 'Client Mode',
+        'Editor Mode': 'Editor Mode'
+      },
+      editor: {
+        // Static text
+        'Video Transkription': 'Video Transcription',
+        'Video auswählen → Transkript erhalten': 'Select video → Get transcript',
+        'Lade Ordner…': 'Loading folders…',
+        'Download': 'Download',
+        'Audio': 'Audio',
+        'Upload': 'Upload',
+        'Transkription': 'Transcription',
+        'Starte…': 'Starting…',
+        'Transkript': 'Transcript',
+        'Zeitstempel': 'Timestamps',
+        'Kopieren': 'Copy',
+        'Notizen speichern': 'Save notes',
+        'Zeit': 'Time',
+        'Text': 'Text',
+        'Lade…': 'Loading…',
+        'Keine Videos in diesem Ordner.': 'No videos in this folder.',
+        'Transkribieren': 'Transcribe',
+        'Behalten': 'Keep',
+        'Ausschneiden': 'Cut',
+        'Löschen': 'Delete',
+        'Alle Ordner': 'All folders',
+        ' – Notizen.txt': ' – Notes.txt',
+        
+        // Dynamic text patterns
+        'Fehler: ': 'Error: ',
+        'Starte…': 'Starting…',
+        'Fertig!': 'Done!',
+        'Server nicht erreichbar.': 'Server not reachable.',
+        'Verbindung zum Server unterbrochen.': 'Connection to server lost.',
+        'Unbekannter Fehler': 'Unknown error',
+        
+        // Mode toggle button
+        'Client Mode': 'Client Mode',
+        'Editor Mode': 'Editor Mode'
+      }
+    };
+
+    // Server progress messages mapping (these come from server.js)
+    const serverMessages = {
+      client: {
+        'Lade Video herunter…': 'Lade Video herunter…',
+        'Lade Video herunter… (${sizeMB} MB — das kann 10–15 Minuten dauern, bitte warten)': 'Lade Video herunter… (${sizeMB} MB — das kann 10–15 Minuten dauern, bitte warten)',
+        'Extrahiere Audio…': 'Extrahiere Audio…',
+        'Lade Audio hoch…': 'Lade Audio hoch…',
+        'Transkribiere Audio…': 'Transkribiere Audio…',
+        'Transkribiere mit Backup-Dienst…': 'Transkribiere mit Backup-Dienst…',
+        'Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 2 GB) und versuche es erneut.': 'Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 2 GB) und versuche es erneut.',
+        'Bitte eine Google Drive URL angeben.': 'Bitte eine Google Drive URL angeben.',
+        'Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...': 'Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...',
+        'Ordner konnte nicht geladen werden.': 'Ordner konnte nicht geladen werden.'
+      },
+      editor: {
+        'Lade Video herunter…': 'Downloading video…',
+        'Lade Video herunter… (${sizeMB} MB — das kann 10–15 Minuten dauern, bitte warten)': 'Downloading video… (${sizeMB} MB — this may take 10–15 minutes, please wait)',
+        'Extrahiere Audio…': 'Extracting audio…',
+        'Lade Audio hoch…': 'Uploading audio…',
+        'Transkribiere Audio…': 'Transcribing audio…',
+        'Transkribiere mit Backup-Dienst…': 'Transcribing with backup service…',
+        'Das Video ist zu groß (${sizeMB} MB). Bitte teile das Video in kleinere Teile auf (max. 2 GB) und versuche es erneut.': 'The video is too large (${sizeMB} MB). Please split the video into smaller parts (max. 2 GB) and try again.',
+        'Bitte eine Google Drive URL angeben.': 'Please provide a Google Drive URL.',
+        'Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...': 'Invalid Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...',
+        'Ordner konnte nicht geladen werden.': 'Folder could not be loaded.'
+      }
+    };
+
     let transcriptData = [];
     let activeJobId = null;
     let activeFileId = null;
     let activeFileName = '';
     let showTimestamps = true;
     let currentFont = 'md';
+    
+    // Drag selection variables
+    let isDragging = false;
+    let dragStartRow = null;
+    let selectedRows = new Set();
+    let dragStartX = 0;
+    let dragStartY = 0;
 
     // ── Breadcrumb state ──────────────────────────────────────────────────────
     let navStack = [];
 
+    // ── Mode Toggle Functions ────────────────────────────────────────────────
+    function toggleMode() {
+      currentMode = currentMode === 'client' ? 'editor' : 'client';
+      localStorage.setItem('fabienne_mode', currentMode);
+      updateModeToggle();
+      applyLanguage();
+    }
+
+    function updateModeToggle() {
+      const toggleBtn = document.getElementById('mode-toggle');
+      if (toggleBtn) {
+        toggleBtn.textContent = currentMode === 'client' ? 'Editor Mode' : 'Client Mode';
+        toggleBtn.title = currentMode === 'client' ? 'Switch to Editor Mode (English)' : 'Switch to Client Mode (German)';
+      }
+    }
+
+    function translateText(text) {
+      // First check if it's a server message with template variables
+      for (const [pattern, translation] of Object.entries(serverMessages[currentMode])) {
+        if (text.includes(pattern.replace(/\$\{sizeMB\}/g, '').split('…')[0])) {
+          // For messages with variables, we need to preserve the variable
+          if (pattern.includes('${sizeMB}')) {
+            // Extract the sizeMB value if present
+            const sizeMatch = text.match(/(\d+)\s*MB/);
+            if (sizeMatch) {
+              const sizeMB = sizeMatch[1];
+              return translation.replace('${sizeMB}', sizeMB);
+            }
+          }
+          return translation;
+        }
+      }
+      
+      // Then check regular translations
+      return translations[currentMode][text] || text;
+    }
+
+    function applyLanguage() {
+      // Update static text elements
+      const elementsToTranslate = [
+        { selector: 'title', prop: 'textContent' },
+        { selector: 'h1', prop: 'textContent' },
+        { selector: '.subtitle', prop: 'textContent' },
+        { selector: '#ts-toggle-btn', prop: 'textContent' },
+        { selector: 'button[onclick="copyAll()"]', prop: 'textContent' },
+        { selector: 'button[onclick="downloadTxt()"]', prop: 'textContent' },
+        { selector: '.ts-col', prop: 'textContent' },
+        { selector: 'th:nth-child(2)', prop: 'textContent' },
+        { selector: '#mode-toggle', prop: 'textContent' }
+      ];
+
+      elementsToTranslate.forEach(({ selector, prop }) => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const originalText = el[prop];
+          if (originalText && translations[currentMode][originalText.trim()]) {
+            el[prop] = translations[currentMode][originalText.trim()];
+          }
+        });
+      });
+
+      // Update button titles in transcript rows
+      document.querySelectorAll('.btn-keep').forEach(btn => {
+        btn.title = translations[currentMode]['Behalten'];
+      });
+      document.querySelectorAll('.btn-cut').forEach(btn => {
+        btn.title = translations[currentMode]['Ausschneiden'];
+      });
+      document.querySelectorAll('.btn-delete-btn').forEach(btn => {
+        btn.title = translations[currentMode]['Löschen'];
+      });
+
+      // Update breadcrumb if it exists
+      const breadcrumbItems = document.querySelectorAll('.breadcrumb-item');
+      breadcrumbItems.forEach(item => {
+        if (item.textContent === 'Alle Ordner') {
+          item.textContent = translations[currentMode]['Alle Ordner'];
+        }
+      });
+
+      // Update any existing file list items
+      document.querySelectorAll('.btn-transcribe').forEach(btn => {
+        if (btn.textContent === 'Transkribieren' || btn.textContent === 'Transcribe') {
+          btn.textContent = translations[currentMode]['Transkribieren'];
+        }
+      });
+
+      // Update any loading/empty messages
+      document.querySelectorAll('.loading-msg').forEach(el => {
+        if (el.textContent === 'Lade Ordner…' || el.textContent === 'Loading folders…') {
+          el.textContent = translations[currentMode]['Lade Ordner…'];
+        } else if (el.textContent === 'Lade…' || el.textContent === 'Loading…') {
+          el.textContent = translations[currentMode]['Lade…'];
+        }
+      });
+
+      document.querySelectorAll('.empty-msg').forEach(el => {
+        if (el.textContent.includes('Keine Videos in diesem Ordner.') || el.textContent.includes('No videos in this folder.')) {
+          el.textContent = translations[currentMode]['Keine Videos in diesem Ordner.'];
+        }
+      });
+
+      // Update progress message if visible
+      const progressMsg = document.getElementById('progress-message');
+      if (progressMsg && (progressMsg.textContent === 'Starte…' || progressMsg.textContent === 'Starting…')) {
+        progressMsg.textContent = translations[currentMode]['Starte…'];
+      }
+
+      // Update error box if visible
+      const errorBox = document.getElementById('error-box');
+      if (errorBox && errorBox.style.display !== 'none') {
+        const errorText = errorBox.textContent;
+        if (errorText.startsWith('Fehler: ') || errorText.startsWith('Error: ')) {
+          const errorMsg = errorText.substring(errorText.indexOf(': ') + 2);
+          errorBox.textContent = translations[currentMode]['Fehler: '] + translateText(errorMsg);
+        }
+      }
+    }
+
+    // Initialize mode on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      updateModeToggle();
+      applyLanguage();
+      
+      // Add click handler to mode toggle
+      const toggleBtn = document.getElementById('mode-toggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', toggleMode);
+      }
+    });
+
     // ── Browse ────────────────────────────────────────────────────────────────
     async function browse(folderId, folderName) {
       if (folderId === null) {
-        navStack = [{ id: null, name: 'Alle Ordner' }];
+        navStack = [{ id: null, name: translations[currentMode]['Alle Ordner'] }];
       } else {
         const idx = navStack.findIndex(n => n.id === folderId);
         if (idx >= 0) {
@@ -472,7 +838,7 @@
         } else {
           const btn = document.createElement('button');
           btn.className = 'btn-transcribe';
-          btn.textContent = 'Transkribieren';
+          btn.textContent = translations[currentMode]['Transkribieren'];
           btn.dataset.fileId = item.id;
           btn.dataset.fileName = item.name;
           btn.onclick = (e) => {
@@ -550,7 +916,7 @@
 
     function setProgress(step, pct, message) {
       document.getElementById('progress-fill').style.width = pct + '%';
-      document.getElementById('progress-message').textContent = message;
+      document.getElementById('progress-message').textContent = translateText(message);
       const stepOrder = ['downloading', 'extracting', 'uploading', 'transcribing'];
       const currentIdx = stepOrder.indexOf(step);
       document.querySelectorAll('.step').forEach((el, i) => {
@@ -562,7 +928,7 @@
 
     function showError(msg) {
       const box = document.getElementById('error-box');
-      box.textContent = 'Fehler: ' + msg;
+      box.textContent = translations[currentMode]['Fehler: '] + translateText(msg);
       box.style.display = 'block';
     }
 
@@ -583,6 +949,9 @@
 
       document.getElementById('result-section').style.display = 'block';
       document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // Initialize drag selection after rendering
+      initDragSelection();
     }
 
     function appendRow(row, i, tbody) {
@@ -601,12 +970,45 @@
 
       const delCell = document.createElement('td');
       delCell.className = 'del-cell';
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn-delete';
-      delBtn.textContent = '×';
-      delBtn.title = 'Zeile löschen';
-      delBtn.onclick = () => deleteRow(tr, i);
-      delCell.appendChild(delBtn);
+      
+      // Create decision buttons container
+      const btnContainer = document.createElement('div');
+      btnContainer.className = 'decision-buttons';
+      
+      // Keep button
+      const keepBtn = document.createElement('button');
+      keepBtn.className = 'btn-decision btn-keep';
+      keepBtn.textContent = '✅ Keep';
+      keepBtn.title = translations[currentMode]['Behalten'];
+      keepBtn.onclick = (e) => {
+        e.stopPropagation();
+        setDecision(tr, 'keep');
+      };
+      
+      // Cut button
+      const cutBtn = document.createElement('button');
+      cutBtn.className = 'btn-decision btn-cut';
+      cutBtn.textContent = '✂️ Cut';
+      cutBtn.title = translations[currentMode]['Ausschneiden'];
+      cutBtn.onclick = (e) => {
+        e.stopPropagation();
+        setDecision(tr, 'cut');
+      };
+      
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn-decision btn-delete-btn';
+      deleteBtn.textContent = '🗑️ Delete';
+      deleteBtn.title = translations[currentMode]['Löschen'];
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        setDecision(tr, 'delete');
+      };
+      
+      btnContainer.appendChild(keepBtn);
+      btnContainer.appendChild(cutBtn);
+      btnContainer.appendChild(deleteBtn);
+      delCell.appendChild(btnContainer);
 
       tr.appendChild(tsCell);
       tr.appendChild(textCell);
@@ -665,7 +1067,7 @@
       const blob = new Blob([buildFullText()], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (activeFileName || 'transkript') + ' – Notizen.txt';
+      a.download = (activeFileName || (currentMode === 'client' ? 'transkript' : 'transcript')) + translations[currentMode][' – Notizen.txt'];
       a.click();
       URL.revokeObjectURL(a.href);
     }
@@ -674,8 +1076,164 @@
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
+    // ── Drag selection functionality ─────────────────────────────────────────
+    function initDragSelection() {
+      const tbody = document.getElementById('transcript-body');
+      if (!tbody) return;
+      
+      tbody.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      // Prevent text selection during drag
+      tbody.addEventListener('selectstart', (e) => {
+        if (isDragging) e.preventDefault();
+      });
+    }
+    
+    function handleMouseDown(e) {
+      // Only start drag if clicking on a row (not on buttons or editable text)
+      const row = e.target.closest('tr');
+      if (!row || e.target.closest('.btn-decision') || e.target.closest('.text-cell[contenteditable="true"]')) {
+        return;
+      }
+      
+      isDragging = true;
+      dragStartRow = row;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      
+      // Clear previous selection
+      clearSelection();
+      
+      // Add initial row to selection
+      toggleRowSelection(row);
+      
+      e.preventDefault();
+    }
+    
+    function handleMouseMove(e) {
+      if (!isDragging) return;
+      
+      const row = e.target.closest('tr');
+      if (row && row !== dragStartRow) {
+        // Select all rows between dragStartRow and current row
+        selectRowRange(dragStartRow, row);
+      }
+      
+      // Update floating toolbar position
+      updateFloatingToolbarPosition(e.clientX, e.clientY);
+    }
+    
+    function handleMouseUp(e) {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      
+      // Show floating toolbar if we have selected rows
+      if (selectedRows.size > 0) {
+        showFloatingToolbar(e.clientX, e.clientY);
+      }
+      
+      e.preventDefault();
+    }
+    
+    function toggleRowSelection(row) {
+      if (selectedRows.has(row)) {
+        selectedRows.delete(row);
+        row.classList.remove('selected');
+      } else {
+        selectedRows.add(row);
+        row.classList.add('selected');
+      }
+    }
+    
+    function clearSelection() {
+      selectedRows.forEach(row => row.classList.remove('selected'));
+      selectedRows.clear();
+      hideFloatingToolbar();
+    }
+    
+    function selectRowRange(startRow, endRow) {
+      // Clear current selection
+      clearSelection();
+      
+      const rows = Array.from(document.querySelectorAll('#transcript-body tr'));
+      const startIndex = rows.indexOf(startRow);
+      const endIndex = rows.indexOf(endRow);
+      
+      if (startIndex === -1 || endIndex === -1) return;
+      
+      const minIndex = Math.min(startIndex, endIndex);
+      const maxIndex = Math.max(startIndex, endIndex);
+      
+      for (let i = minIndex; i <= maxIndex; i++) {
+        const row = rows[i];
+        selectedRows.add(row);
+        row.classList.add('selected');
+      }
+    }
+    
+    function showFloatingToolbar(x, y) {
+      const toolbar = document.getElementById('floating-toolbar');
+      toolbar.style.left = (x + 10) + 'px';
+      toolbar.style.top = (y - 50) + 'px';
+      toolbar.classList.add('visible');
+    }
+    
+    function hideFloatingToolbar() {
+      const toolbar = document.getElementById('floating-toolbar');
+      toolbar.classList.remove('visible');
+    }
+    
+    function updateFloatingToolbarPosition(x, y) {
+      const toolbar = document.getElementById('floating-toolbar');
+      if (toolbar.classList.contains('visible')) {
+        toolbar.style.left = (x + 10) + 'px';
+        toolbar.style.top = (y - 50) + 'px';
+      }
+    }
+    
+    function applyDecisionToSelected(decision) {
+      selectedRows.forEach(row => {
+        setDecision(row, decision);
+      });
+      clearSelection();
+    }
+    
+    // Also need to clear selection when clicking on individual decision buttons
+    function setDecision(row, decision) {
+      // Clear any previous decision
+      row.removeAttribute('data-decision');
+      
+      // Remove active class from all buttons in this row
+      const buttons = row.querySelectorAll('.btn-decision');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      
+      // Set new decision
+      if (decision) {
+        row.setAttribute('data-decision', decision);
+        // Activate the corresponding button
+        const btnMap = {
+          'keep': 'btn-keep',
+          'cut': 'btn-cut',
+          'delete': 'btn-delete-btn'
+        };
+        const activeBtn = row.querySelector(`.${btnMap[decision]}`);
+        if (activeBtn) {
+          activeBtn.classList.add('active');
+        }
+      }
+      
+      // Clear drag selection when clicking individual buttons
+      clearSelection();
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
     browse(null, 'Alle Ordner');
+    
+    // Initialize drag selection when transcript is rendered
+    // We'll call this from renderTranscript
   </script>
 </body>
 </html>
