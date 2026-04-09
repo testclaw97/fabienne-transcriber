@@ -528,7 +528,7 @@
   <!-- URL paste input -->
   <div class="card" id="url-input-card">
     <div style="display:flex;gap:8px;align-items:center;">
-      <input type="text" id="drive-url-input" placeholder="Google Drive Video-URL einfügen… (drive.google.com/file/d/...)" style="flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
+      <input type="text" id="drive-url-input" placeholder="Google Drive Video-URL einfügen… (drive.google.com/file/d/...)" onkeydown="if(event.key==='Enter')startTranscriptionFromUrl()" style="flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
       <button onclick="startTranscriptionFromUrl()" style="padding:10px 18px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">▶ Starten</button>
     </div>
   </div>
@@ -1061,11 +1061,6 @@
       input.value = '';
       startTranscription(fileId, fileName);
     }
-
-    // Allow Enter key in URL input
-    document.getElementById('drive-url-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') startTranscriptionFromUrl();
-    });
 
     // ── Transcription ─────────────────────────────────────────────────────────
     async function startTranscription(fileId, fileName) {
