@@ -18,6 +18,8 @@ const GLADIA_API_KEY = process.env.GLADIA_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const ROOT_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1T1TrG_5JpMolwTEm2oiKKH4C-n7fLtar';
 const PORT = process.env.PORT || 3000;
+const MEDIA_DIR = path.join(__dirname, 'media');
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
 if (!GLADIA_API_KEY) {
   console.error('ERROR: GLADIA_API_KEY is not set in .env');
@@ -119,6 +121,30 @@ function extractAudio(videoPath, audioPath) {
     ffmpeg.on('close', code => {
       if (code === 0) resolve();
       else reject(new Error(`FFmpeg failed (exit ${code}): ${stderr.slice(-300)}`));
+    });
+    ffmpeg.on('error', err => reject(new Error(`FFmpeg not found: ${err.message}`)));
+  });
+}
+
+function transcode144p(videoPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn(ffmpegPath, [
+      '-i', videoPath,
+      '-vf', 'scale=-2:144',
+      '-c:v', 'libx264',
+      '-crf', '28',
+      '-preset', 'fast',
+      '-c:a', 'aac',
+      '-b:a', '64k',
+      '-y',
+      outputPath,
+    ]);
+
+    let stderr = '';
+    ffmpeg.stderr.on('data', d => { stderr += d.toString(); });
+    ffmpeg.on('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`FFmpeg 144p transcode failed (exit ${code}): ${stderr.slice(-300)}`));
     });
     ffmpeg.on('error', err => reject(new Error(`FFmpeg not found: ${err.message}`)));
   });
@@ -357,6 +383,20 @@ async function processJob(jobId, fileId) {
     notifyClients(jobId, { type: 'progress', step: 'extracting', pct: 20, message: 'Extrahiere Audio…' });
     await extractAudio(videoPath, audioPath);
 
+    // Generate 144p preview and persist audio in media directory
+    notifyClients(jobId, { type: 'progress', step: 'preview', pct: 30, message: 'Erstelle Vorschau…' });
+    const jobMediaDir = path.join(MEDIA_DIR, jobId);
+    fs.mkdirSync(jobMediaDir, { recursive: true });
+    const previewPath = path.join(jobMediaDir, 'preview.mp4');
+    try {
+      await transcode144p(videoPath, previewPath);
+    } catch (err) {
+      console.error(`Failed to generate preview for job ${jobId}:`, err.message);
+      // Don't throw, continue without preview
+    }
+    const persistAudioPath = path.join(jobMediaDir, 'audio.mp3');
+    fs.copyFileSync(audioPath, persistAudioPath);
+
     // Delete video right away — we only need the audio
     fs.rmSync(videoPath, { force: true });
 
@@ -383,10 +423,10 @@ async function processJob(jobId, fileId) {
     const job = jobs.get(jobId);
     if (job) {
       job.status = 'done';
-      job.result = { transcript, fullText, aiGrouping };
+      job.result = { transcript, fullText, aiGrouping, hasMedia: true };
     }
 
-    notifyClients(jobId, { type: 'done', transcript, fullText, aiGrouping });
+    notifyClients(jobId, { type: 'done', transcript, fullText, aiGrouping, hasMedia: true });
   } catch (err) {
     console.error(`Job ${jobId} failed:`, err.message);
     const job = jobs.get(jobId);
@@ -521,8 +561,60 @@ app.get('/progress/:jobId', (req, res) => {
   });
 });
 
+// ── Media serving ─────────────────────────────────────────────────────────────
+
+app.get('/media/:jobId/audio', (req, res) => {
+  const { jobId } = req.params;
+  const audioPath = path.join(MEDIA_DIR, jobId, 'audio.mp3');
+  
+  if (!fs.existsSync(audioPath)) {
+    return res.status(404).json({ error: 'Audio not found' });
+  }
+  
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.sendFile(audioPath);
+});
+
+app.get('/media/:jobId/preview', (req, res) => {
+  const { jobId } = req.params;
+  const previewPath = path.join(MEDIA_DIR, jobId, 'preview.mp4');
+  
+  if (!fs.existsSync(previewPath)) {
+    return res.status(404).json({ error: 'Preview not found' });
+  }
+  
+  res.setHeader('Content-Type', 'video/mp4');
+  res.sendFile(previewPath);
+});
+
+// ── Media cleanup ─────────────────────────────────────────────────────────────
+
+function cleanOldMedia() {
+  try {
+    const now = Date.now();
+    const maxAge = 48 * 3600 * 1000; // 48 hours in milliseconds
+    
+    const items = fs.readdirSync(MEDIA_DIR, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isDirectory()) {
+        const dirPath = path.join(MEDIA_DIR, item.name);
+        const stats = fs.statSync(dirPath);
+        const age = now - stats.mtimeMs;
+        
+        if (age > maxAge) {
+          console.log(`Cleaning old media directory: ${item.name} (${Math.round(age / 3600000)}h old)`);
+          fs.rmSync(dirPath, { recursive: true, force: true });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error cleaning old media:', err.message);
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`Fabienne Transcription running at http://localhost:${PORT}`);
+  cleanOldMedia();
 });

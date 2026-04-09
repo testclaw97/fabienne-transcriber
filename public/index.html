@@ -443,6 +443,7 @@
     <div class="steps">
       <div class="step" data-step="downloading">Download</div>
       <div class="step" data-step="extracting">Audio</div>
+      <div class="step" data-step="preview">Vorschau</div>
       <div class="step" data-step="uploading">Upload</div>
       <div class="step" data-step="transcribing">Transkription</div>
       <div class="step" data-step="ai_grouping">KI-Analyse</div>
@@ -929,7 +930,7 @@
     function setProgress(step, pct, message) {
       document.getElementById('progress-fill').style.width = pct + '%';
       document.getElementById('progress-message').textContent = translateText(message);
-      const stepOrder = ['downloading', 'extracting', 'uploading', 'transcribing', 'ai_grouping'];
+      const stepOrder = ['downloading', 'extracting', 'preview', 'uploading', 'transcribing', 'ai_grouping'];
       const currentIdx = stepOrder.indexOf(step);
       document.querySelectorAll('.step').forEach((el, i) => {
         el.classList.remove('active', 'done');
