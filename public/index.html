@@ -277,6 +277,24 @@
     }
     .text-cell[contenteditable="true"]:focus { background: #f0f0ff; }
 
+    .note-cell { width: 180px; padding: 6px 4px; }
+    .note-input {
+      font-family: inherit;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 3px 6px;
+      resize: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .note-input:focus {
+      outline: none;
+      border-color: #5b5ef4;
+      box-shadow: 0 0 0 2px rgba(91, 94, 244, 0.1);
+    }
+
     .del-cell { width: 120px; padding: 6px 4px; text-align: center; }
     .btn-delete {
       background: none;
@@ -594,6 +612,7 @@
             <tr>
               <th class="ts-col">Zeit</th>
               <th>Text</th>
+              <th>Notiz</th>
               <th></th>
             </tr>
           </thead>
@@ -635,6 +654,7 @@
         'Notizen speichern': 'Notizen speichern',
         'Zeit': 'Zeit',
         'Text': 'Text',
+        'Notiz': 'Notiz',
         'Lade…': 'Lade…',
         'Keine Videos in diesem Ordner.': 'Keine Videos in diesem Ordner.',
         'Transkribieren': 'Transkribieren',
@@ -679,6 +699,7 @@
         'Notizen speichern': 'Save notes',
         'Zeit': 'Time',
         'Text': 'Text',
+        'Notiz': 'Note',
         'Lade…': 'Loading…',
         'Keine Videos in diesem Ordner.': 'No videos in this folder.',
         'Transkribieren': 'Transcribe',
@@ -749,6 +770,9 @@
     let syncInterval = null;
     let lastPlayingRowIndex = -1;
     
+    // Auto-save variables
+    let autoSaveTimer = null;
+    
     // AI Grouping variables
     let lastAiGrouping = null;
     let lastTranscript = null;
@@ -816,6 +840,7 @@
         { selector: 'button[onclick="downloadTxt()"]', prop: 'textContent' },
         { selector: '.ts-col', prop: 'textContent' },
         { selector: 'th:nth-child(2)', prop: 'textContent' },
+        { selector: 'th:nth-child(3)', prop: 'textContent' },
         { selector: '#mode-toggle', prop: 'textContent' },
         { selector: '#chat-hint-text', prop: 'textContent' }
       ];
@@ -848,6 +873,11 @@
       });
       document.querySelectorAll('.btn-delete-btn').forEach(btn => {
         btn.title = translations[currentMode]['Löschen'];
+      });
+      
+      // Update note textarea placeholders
+      document.querySelectorAll('.note-input').forEach(textarea => {
+        textarea.placeholder = translations[currentMode]['Notiz'] + '…';
       });
 
       // Update breadcrumb if it exists
@@ -906,6 +936,15 @@
       const toggleBtn = document.getElementById('mode-toggle');
       if (toggleBtn) {
         toggleBtn.addEventListener('click', toggleMode);
+      }
+      
+      // Check for jobId in URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const jobIdFromUrl = urlParams.get('jobId');
+      if (jobIdFromUrl) {
+        // Store jobId for later use
+        currentJobId = jobIdFromUrl;
+        // We'll load the session after transcript is loaded
       }
     });
 
@@ -1123,6 +1162,11 @@ function renderTranscript(data) {
 
       // Initialize drag selection after rendering
       initDragSelection();
+      
+      // Save initial empty session
+      if (currentJobId) {
+        setTimeout(() => saveSession(), 1000);
+      }
 
       // Render AI grouping if available
       renderAiGrouping(lastAiGrouping, data);
@@ -1233,7 +1277,24 @@ function renderTranscript(data) {
       textCell.className = 'text-cell';
       textCell.contentEditable = 'true';
       textCell.textContent = row.text;
-      textCell.oninput = () => { transcriptData[i].text = textCell.textContent; };
+      textCell.oninput = () => { 
+        transcriptData[i].text = textCell.textContent;
+        triggerAutoSave();
+      };
+
+      // Notes cell with textarea
+      const noteCell = document.createElement('td');
+      noteCell.className = 'note-cell';
+      const noteTextarea = document.createElement('textarea');
+      noteTextarea.className = 'note-input';
+      noteTextarea.placeholder = translations[currentMode]['Notiz'] + '…';
+      noteTextarea.rows = 1;
+      noteTextarea.style.cssText = 'width:100%;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;padding:3px 6px;resize:none;';
+      noteTextarea.oninput = function() {
+        tr.setAttribute('data-note', this.value);
+        triggerAutoSave();
+      };
+      noteCell.appendChild(noteTextarea);
 
       const delCell = document.createElement('td');
       delCell.className = 'del-cell';
@@ -1279,6 +1340,7 @@ function renderTranscript(data) {
 
       tr.appendChild(tsCell);
       tr.appendChild(textCell);
+      tr.appendChild(noteCell);
       tr.appendChild(delCell);
       tbody.appendChild(tr);
     }
@@ -1517,7 +1579,104 @@ function renderTranscript(data) {
       
       // Update generate cut button visibility
       updateGenerateCutButton();
+      
+      // Trigger auto-save
+      triggerAutoSave();
     }
+    
+    // ── Auto-save Functions ───────────────────────────────────────────────────
+    
+    function triggerAutoSave() {
+      // Clear existing timer
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+      
+      // Set new timer (2 seconds debounce)
+      autoSaveTimer = setTimeout(saveSession, 2000);
+    }
+    
+    async function saveSession() {
+      if (!currentJobId) return;
+      
+      // Collect all decisions and notes from rows
+      const decisions = {};
+      const notes = {};
+      
+      const rows = document.querySelectorAll('#transcript-body tr');
+      rows.forEach(row => {
+        const index = row.dataset.index;
+        if (index !== undefined) {
+          const decision = row.getAttribute('data-decision');
+          if (decision) {
+            decisions[index] = decision;
+          }
+          
+          const note = row.getAttribute('data-note');
+          if (note) {
+            notes[index] = note;
+          }
+        }
+      });
+      
+      try {
+        const response = await fetch(`/api/session/${currentJobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decisions, notes })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to save session');
+        }
+        
+        console.log('Session saved successfully');
+      } catch (err) {
+        console.error('Error saving session:', err);
+      }
+    }
+    
+    async function restoreSession() {
+      if (!currentJobId) return;
+      
+      try {
+        const response = await fetch(`/api/session/${currentJobId}`);
+        if (!response.ok) {
+          throw new Error('Failed to load session');
+        }
+        
+        const sessionData = await response.json();
+        const { decisions = {}, notes = {} } = sessionData;
+        
+        // Restore decisions and notes
+        const rows = document.querySelectorAll('#transcript-body tr');
+        rows.forEach(row => {
+          const index = row.dataset.index;
+          if (index !== undefined) {
+            // Restore decision
+            const decision = decisions[index];
+            if (decision) {
+              setDecision(row, decision);
+            }
+            
+            // Restore note
+            const note = notes[index];
+            if (note) {
+              row.setAttribute('data-note', note);
+              const noteTextarea = row.querySelector('.note-input');
+              if (noteTextarea) {
+                noteTextarea.value = note;
+              }
+            }
+          }
+        });
+        
+        console.log('Session restored successfully');
+      } catch (err) {
+        console.error('Error restoring session:', err);
+      }
+    }
+    
     // ── Transcript Sync Functions ──────────────────────────────────────────────
     
     function initTranscriptSync() {

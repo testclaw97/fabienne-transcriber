@@ -21,6 +21,9 @@ const PORT = process.env.PORT || 3000;
 const MEDIA_DIR = path.join(__dirname, 'media');
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
+const SESSIONS_DIR = path.join(__dirname, 'sessions');
+fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
 if (!GLADIA_API_KEY) {
   console.error('ERROR: GLADIA_API_KEY is not set in .env');
   process.exit(1);
@@ -559,6 +562,48 @@ app.get('/progress/:jobId', (req, res) => {
       job.clients = job.clients.filter(c => c !== res);
     }
   });
+});
+
+// ── Session Persistence ─────────────────────────────────────────────────────────────
+
+app.post('/api/session/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  const { decisions, notes } = req.body;
+  
+  if (!decisions || typeof decisions !== 'object') {
+    return res.status(400).json({ error: 'Decisions object is required' });
+  }
+  
+  if (!notes || typeof notes !== 'object') {
+    return res.status(400).json({ error: 'Notes object is required' });
+  }
+  
+  try {
+    const sessionPath = path.join(SESSIONS_DIR, `${jobId}.json`);
+    const sessionData = { decisions, notes, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(sessionPath, JSON.stringify(sessionData, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error saving session:', err.message);
+    res.status(500).json({ error: 'Failed to save session' });
+  }
+});
+
+app.get('/api/session/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  
+  try {
+    const sessionPath = path.join(SESSIONS_DIR, `${jobId}.json`);
+    if (fs.existsSync(sessionPath)) {
+      const sessionData = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+      res.json(sessionData);
+    } else {
+      res.json({ decisions: {}, notes: {} });
+    }
+  } catch (err) {
+    console.error('Error loading session:', err.message);
+    res.status(500).json({ error: 'Failed to load session' });
+  }
 });
 
 // ── AI Chat Interface ─────────────────────────────────────────────────────────────
