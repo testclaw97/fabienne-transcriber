@@ -227,6 +227,12 @@
       white-space: nowrap;
     }
     button.btn-save:hover { background: #16a34a; }
+    button.btn-save:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #94a3b8;
+    }
+    button.btn-save:disabled:hover { background: #94a3b8; }
 
     .toolbar-sep {
       width: 1px;
@@ -556,6 +562,14 @@
           <div style="font-size: 0.75rem; color: #888; text-align: center; padding: 4px 8px 8px;">
             <span id="chat-hint-text">Tippe oder sprich auf Deutsch</span>
           </div>
+        </div>
+        
+        <!-- Generate Cut Button -->
+        <div id="generate-cut-container" style="display: none; margin-top: 16px; text-align: center;">
+          <button id="generate-cut-btn" class="btn-save" style="width: 100%; padding: 10px 16px; font-size: 0.9rem;" onclick="generateCut()">
+            Schnitt erstellen ✂️
+          </button>
+          <div id="generate-cut-status" style="font-size: 0.75rem; color: #666; margin-top: 8px; min-height: 20px;"></div>
         </div>
       </div>
 
@@ -1112,6 +1126,9 @@ function renderTranscript(data) {
 
       // Render AI grouping if available
       renderAiGrouping(lastAiGrouping, data);
+      
+      // Update generate cut button visibility
+      updateGenerateCutButton();
     }
 
 
@@ -1497,6 +1514,9 @@ function renderTranscript(data) {
       
       // Clear drag selection when clicking individual buttons
       clearSelection();
+      
+      // Update generate cut button visibility
+      updateGenerateCutButton();
     }
     // ── Transcript Sync Functions ──────────────────────────────────────────────
     
@@ -1848,6 +1868,127 @@ function renderTranscript(data) {
         chatSendBtn.addEventListener('click', sendChatMessage);
       }
     });
+
+    // ── Generate Cut Function ─────────────────────────────────────────────────
+    
+    async function generateCut() {
+      if (!currentJobId) {
+        addChatMessage('assistant', 'Kein aktiver Job gefunden.');
+        return;
+      }
+      
+      // Collect decisions from all transcript rows
+      const decisions = {};
+      const rows = document.querySelectorAll('#transcript-body tr');
+      let hasCutOrDelete = false;
+      
+      rows.forEach((row, index) => {
+        const decision = row.getAttribute('data-decision');
+        if (decision) {
+          decisions[index] = decision;
+          if (decision === 'cut' || decision === 'delete') {
+            hasCutOrDelete = true;
+          }
+        }
+      });
+      
+      // Check if at least one segment is marked cut or delete
+      if (!hasCutOrDelete) {
+        addChatMessage('assistant', 'Keine Segmente zum Schneiden markiert. Bitte markiere zu entfernende Segmente als "cut" oder "delete".');
+        return;
+      }
+      
+      // Show loading state
+      const generateCutBtn = document.getElementById('generate-cut-btn');
+      const originalText = generateCutBtn.textContent;
+      generateCutBtn.textContent = 'Wird erstellt…';
+      generateCutBtn.disabled = true;
+      
+      const statusEl = document.getElementById('generate-cut-status');
+      statusEl.textContent = 'Erstelle Schnitt…';
+      statusEl.style.color = '#666';
+      
+      try {
+        // POST to /api/render/{currentJobId}
+        const response = await fetch(`/api/render/${currentJobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decisions }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Unbekannter Fehler');
+        }
+        
+        // Success: update video player
+        const videoPlayer = document.getElementById('video-player');
+        if (videoPlayer) {
+          videoPlayer.src = data.url + '?t=' + Date.now(); // cache bust
+          videoPlayer.load();
+        }
+        
+        // Show success message in chat
+        addChatMessage('assistant', 'Schnitt fertig! Du kannst die 144p-Vorschau jetzt im Player sehen.');
+        
+        // Update status
+        statusEl.textContent = 'Schnitt erfolgreich erstellt!';
+        statusEl.style.color = '#22c55e';
+        
+      } catch (error) {
+        console.error('Generate cut error:', error);
+        
+        // Show error in chat
+        addChatMessage('assistant', `Fehler beim Erstellen des Schnitts: ${error.message}`);
+        
+        // Update status
+        statusEl.textContent = `Fehler: ${error.message}`;
+        statusEl.style.color = '#ef4444';
+        
+      } finally {
+        // Restore button
+        generateCutBtn.textContent = originalText;
+        generateCutBtn.disabled = false;
+        
+        // Clear status after 5 seconds
+        setTimeout(() => {
+          statusEl.textContent = '';
+        }, 5000);
+      }
+    }
+    
+    // Function to update generate cut button visibility
+    function updateGenerateCutButton() {
+      const container = document.getElementById('generate-cut-container');
+      if (!container) return;
+      
+      // Check if hasMedia is true and at least one segment is marked cut or delete
+      const mediaPanel = document.getElementById('media-panel');
+      const hasMedia = mediaPanel && !mediaPanel.classList.contains('hidden');
+      
+      if (!hasMedia) {
+        container.style.display = 'none';
+        return;
+      }
+      
+      // Check for cut/delete decisions
+      const rows = document.querySelectorAll('#transcript-body tr');
+      let hasCutOrDelete = false;
+      
+      rows.forEach(row => {
+        const decision = row.getAttribute('data-decision');
+        if (decision === 'cut' || decision === 'delete') {
+          hasCutOrDelete = true;
+        }
+      });
+      
+      if (hasCutOrDelete) {
+        container.style.display = 'block';
+      } else {
+        container.style.display = 'none';
+      }
+    }
 
     // ── Init ──────────────────────────────────────────────────────────────────
     browse(null, 'Alle Ordner');

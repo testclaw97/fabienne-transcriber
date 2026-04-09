@@ -680,6 +680,107 @@ app.get('/media/:jobId/preview', (req, res) => {
   res.sendFile(previewPath);
 });
 
+// ── FFmpeg 144p cut render ───────────────────────────────────────────────────
+
+app.post('/api/render/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { decisions } = req.body;
+    
+    // 1. Look up job by jobId
+    const job = jobs.get(jobId);
+    if (!job || job.status !== 'done' || !job.result || !job.result.transcript) {
+      return res.status(400).json({ error: 'Job not found or no transcript available' });
+    }
+    
+    // 2. Validate decisions object
+    if (!decisions || typeof decisions !== 'object') {
+      return res.status(400).json({ error: 'Decisions object is required' });
+    }
+    
+    // 3. Check job media directory exists and has preview.mp4
+    const jobMediaDir = path.join(MEDIA_DIR, jobId);
+    const previewPath = path.join(jobMediaDir, 'preview.mp4');
+    if (!fs.existsSync(jobMediaDir) || !fs.existsSync(previewPath)) {
+      return res.status(404).json({ error: 'Preview video not found' });
+    }
+    
+    // 4. Get transcript and compute time ranges
+    const transcript = job.result.transcript;
+    const segmentsToKeep = [];
+    
+    for (let i = 0; i < transcript.length; i++) {
+      const decision = decisions[String(i)];
+      // Only 'cut' and 'delete' are removed, everything else is kept
+      if (decision !== 'cut' && decision !== 'delete') {
+        const start = transcript[i].start; // seconds, integer
+        const end = i + 1 < transcript.length ? transcript[i + 1].start : (start + 30); // fallback 30 seconds
+        segmentsToKeep.push({ start, end });
+      }
+    }
+    
+    // 5. Check if any segments to keep
+    if (segmentsToKeep.length === 0) {
+      return res.status(400).json({ error: 'Keine Segmente zum Behalten' });
+    }
+    
+    // 6. Build FFmpeg concat filter
+    const concatFile = path.join(jobMediaDir, 'concat.txt');
+    const outputPath = path.join(jobMediaDir, 'cut_preview.mp4');
+    
+    // Write concat.txt file
+    const concatLines = [];
+    for (const segment of segmentsToKeep) {
+      concatLines.push(`file 'preview.mp4'`);
+      concatLines.push(`inpoint ${segment.start}`);
+      concatLines.push(`outpoint ${segment.end}`);
+    }
+    fs.writeFileSync(concatFile, concatLines.join('\n'));
+    
+    // Run FFmpeg concat
+    await new Promise((resolve, reject) => {
+      const ffmpeg = spawn(ffmpegPath, [
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', concatFile,
+        '-c', 'copy',
+        '-y',
+        outputPath,
+      ]);
+      
+      let stderr = '';
+      ffmpeg.stderr.on('data', d => { stderr += d.toString(); });
+      ffmpeg.on('close', code => {
+        if (code === 0) resolve();
+        else reject(new Error(`FFmpeg concat failed (exit ${code}): ${stderr.slice(-300)}`));
+      });
+      ffmpeg.on('error', err => reject(new Error(`FFmpeg not found: ${err.message}`)));
+    });
+    
+    // 7. Delete temp concat file
+    fs.unlinkSync(concatFile);
+    
+    // 8. Return success with URL
+    res.json({ url: '/media/' + jobId + '/cut_preview' });
+    
+  } catch (err) {
+    console.error('Render endpoint error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/media/:jobId/cut_preview', (req, res) => {
+  const { jobId } = req.params;
+  const cutPreviewPath = path.join(MEDIA_DIR, jobId, 'cut_preview.mp4');
+  
+  if (!fs.existsSync(cutPreviewPath)) {
+    return res.status(404).json({ error: 'Cut preview not found' });
+  }
+  
+  res.setHeader('Content-Type', 'video/mp4');
+  res.sendFile(cutPreviewPath);
+});
+
 // ── Media cleanup ─────────────────────────────────────────────────────────────
 
 function cleanOldMedia() {
