@@ -561,6 +561,99 @@ app.get('/progress/:jobId', (req, res) => {
   });
 });
 
+// ── AI Chat Interface ─────────────────────────────────────────────────────────────
+
+app.post('/api/chat/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { message, history = [], decisions = {}, notes = {} } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const job = jobs.get(jobId);
+    if (!job || job.status !== 'done' || !job.result || !job.result.transcript) {
+      return res.status(400).json({ error: 'Job not found or no transcript available' });
+    }
+
+    const { transcript, aiGrouping } = job.result;
+    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+
+    if (!DEEPSEEK_API_KEY) {
+      return res.status(500).json({ error: 'DeepSeek API key not configured' });
+    }
+
+    // Build transcript context
+    const transcriptSegments = transcript.map((s, i) => ({
+      i,
+      ts: s.timestamp,
+      text: s.text
+    }));
+
+    // Prepare system prompt
+    let systemPrompt = 'Du bist ein freundlicher KI-Videoeditor-Assistent für Fabienne. Du verstehst Deutsch und kannst Videobearbeitungsanweisungen ausführen. Das Transkript hat nummerierte Segmente (0-basiert). Du antwortest kurz auf Deutsch. Wenn du Aktionen ausführst, gibst du IMMER ein JSON actions-Array zurück. Antworte im Format: {"reply": "...", "actions": [...]}. Verfügbare Aktionen: {"type":"setDecision","index":0,"decision":"keep|cut|delete"}, {"type":"setDecisionRange","from":0,"to":5,"decision":"keep|cut|delete"}, {"type":"seekTo","seconds":30}, {"type":"addNote","index":0,"note":"text"}, {"type":"clearAll"}';
+    
+    systemPrompt += '\n\nTranskript-Segmente: ' + JSON.stringify(transcriptSegments);
+    systemPrompt += '\n\nAktuelle Entscheidungen: ' + JSON.stringify(decisions);
+    
+    if (Object.keys(notes).length > 0) {
+      systemPrompt += '\n\nAktuelle Notizen: ' + JSON.stringify(notes);
+    }
+
+    // Prepare messages array (history + new message)
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-10).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      { role: 'user', content: message }
+    ];
+
+    // Call DeepSeek API
+    const response = await axios.post(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: messages,
+        max_tokens: 1024,
+        temperature: 0.4
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const content = response.data.choices[0].message.content;
+    
+    // Try to parse JSON response
+    let reply = content;
+    let actions = [];
+    
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.reply && Array.isArray(parsed.actions)) {
+        reply = parsed.reply;
+        actions = parsed.actions;
+      }
+    } catch (parseError) {
+      // If parsing fails, treat the whole content as reply with no actions
+      console.log('Failed to parse DeepSeek JSON response, using raw content:', parseError.message);
+    }
+
+    return res.json({ reply, actions });
+    
+  } catch (error) {
+    console.error('Chat endpoint error:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── Media serving ─────────────────────────────────────────────────────────────
 
 app.get('/media/:jobId/audio', (req, res) => {

@@ -428,6 +428,53 @@
       transform: translateY(0);
     }
 
+    /* Chat Panel */
+    .chat-panel {
+      margin-top: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .chat-history {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .chat-bubble {
+      padding: 8px 12px;
+      border-radius: 8px;
+      max-width: 85%;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+    .chat-bubble.user {
+      background: #5b5ef4;
+      color: white;
+      align-self: flex-end;
+    }
+    .chat-bubble.assistant {
+      background: #f0f0f0;
+      color: #333;
+      align-self: flex-start;
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border-top: 1px solid #e0e0e0;
+    }
+    #chat-input {
+      flex: 1;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.85rem;
+      resize: none;
+    }
+
     /* Responsive: stack on small screens */
     @media (max-width: 800px) {
       .editor-layout { flex-direction: column; }
@@ -497,6 +544,19 @@
           </audio>
         </div>
         <div class="media-title" id="media-title"></div>
+        
+        <!-- AI Chat Panel -->
+        <div class="chat-panel" id="chat-panel" style="display: none;">
+          <div class="chat-history" id="chat-history"></div>
+          <div class="chat-input-row">
+            <textarea id="chat-input" placeholder="Frag die KI… z.B. &quot;Schneide alles wo ich gestottert habe&quot;" rows="2"></textarea>
+            <button class="btn-tool" id="chat-send-btn" onclick="sendChatMessage()">▶</button>
+            <button class="btn-tool" id="chat-mic-btn" onclick="toggleSpeechRecognition()">🎤</button>
+          </div>
+          <div style="font-size: 0.75rem; color: #888; text-align: center; padding: 4px 8px 8px;">
+            <span id="chat-hint-text">Tippe oder sprich auf Deutsch</span>
+          </div>
+        </div>
       </div>
 
       <!-- Right: transcript editor -->
@@ -580,7 +640,14 @@
         
         // Mode toggle button
         'Client Mode': 'Client Mode',
-        'Editor Mode': 'Editor Mode'
+        'Editor Mode': 'Editor Mode',
+        
+        // Chat interface
+        'Frag die KI… z.B. "Schneide alles wo ich gestottert habe"': 'Frag die KI… z.B. "Schneide alles wo ich gestottert habe"',
+        'Tippe oder sprich auf Deutsch': 'Tippe oder sprich auf Deutsch',
+        'Mikrofon nicht verfügbar': 'Mikrofon nicht verfügbar',
+        'Spracherkennung fehlgeschlagen': 'Spracherkennung fehlgeschlagen',
+        'Entschuldigung, ein Fehler ist aufgetreten. Bitte versuche es erneut.': 'Entschuldigung, ein Fehler ist aufgetreten. Bitte versuche es erneut.'
       },
       editor: {
         // Static text
@@ -617,7 +684,14 @@
         
         // Mode toggle button
         'Client Mode': 'Client Mode',
-        'Editor Mode': 'Editor Mode'
+        'Editor Mode': 'Editor Mode',
+        
+        // Chat interface
+        'Frag die KI… z.B. "Schneide alles wo ich gestottert habe"': 'Ask the AI… e.g. "Cut everything where I stuttered"',
+        'Tippe oder sprich auf Deutsch': 'Type or speak in German',
+        'Mikrofon nicht verfügbar': 'Microphone not available',
+        'Spracherkennung fehlgeschlagen': 'Speech recognition failed',
+        'Entschuldigung, ein Fehler ist aufgetreten. Bitte versuche es erneut.': 'Sorry, an error occurred. Please try again.'
       }
     };
 
@@ -728,7 +802,8 @@
         { selector: 'button[onclick="downloadTxt()"]', prop: 'textContent' },
         { selector: '.ts-col', prop: 'textContent' },
         { selector: 'th:nth-child(2)', prop: 'textContent' },
-        { selector: '#mode-toggle', prop: 'textContent' }
+        { selector: '#mode-toggle', prop: 'textContent' },
+        { selector: '#chat-hint-text', prop: 'textContent' }
       ];
 
       elementsToTranslate.forEach(({ selector, prop }) => {
@@ -740,6 +815,15 @@
           }
         });
       });
+
+      // Update chat input placeholder
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput) {
+        const placeholderText = 'Frag die KI… z.B. "Schneide alles wo ich gestottert habe"';
+        if (translations[currentMode][placeholderText]) {
+          chatInput.placeholder = translations[currentMode][placeholderText];
+        }
+      }
 
       // Update button titles in transcript rows
       document.querySelectorAll('.btn-keep').forEach(btn => {
@@ -965,6 +1049,9 @@
             
             // Initialize transcript sync
             initTranscriptSync();
+            
+            // Show chat panel
+            showChatPanel();
           } else {
             mediaPanel.classList.add('hidden');
             // Stop any existing sync
@@ -1535,6 +1622,232 @@ function renderTranscript(data) {
     }
     
 
+    }
+    
+    // ── AI Chat Functions ─────────────────────────────────────────────────────
+    
+    let chatHistory = [];
+    let isListening = false;
+    let speechRecognition = null;
+    
+    function showChatPanel() {
+      const chatPanel = document.getElementById('chat-panel');
+      if (chatPanel) {
+        chatPanel.style.display = 'block';
+        // Scroll to bottom of chat history
+        const chatHistoryEl = document.getElementById('chat-history');
+        if (chatHistoryEl) {
+          chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+        }
+      }
+    }
+    
+    function addChatMessage(role, content) {
+      const chatHistoryEl = document.getElementById('chat-history');
+      if (!chatHistoryEl) return;
+      
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${role}`;
+      bubble.textContent = content;
+      chatHistoryEl.appendChild(bubble);
+      
+      // Scroll to bottom
+      chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+      
+      // Add to history (max 10 messages)
+      chatHistory.push({ role, content });
+      if (chatHistory.length > 10) {
+        chatHistory = chatHistory.slice(-10);
+      }
+    }
+    
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      if (!input) return;
+      
+      const message = input.value.trim();
+      if (!message) return;
+      
+      // Add user message to chat
+      addChatMessage('user', message);
+      input.value = '';
+      
+      // Collect current decisions
+      const decisions = {};
+      const rows = document.querySelectorAll('#transcript-body tr');
+      rows.forEach((row, index) => {
+        const decision = row.getAttribute('data-decision');
+        if (decision) {
+          decisions[index] = decision;
+        }
+      });
+      
+      // Collect current notes
+      const notes = {};
+      rows.forEach((row, index) => {
+        const noteInput = row.querySelector('input[type="text"]');
+        if (noteInput && noteInput.value.trim()) {
+          notes[index] = noteInput.value.trim();
+        }
+      });
+      
+      try {
+        const response = await fetch(`/api/chat/${currentJobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            history: chatHistory,
+            decisions,
+            notes
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Chat request failed');
+        }
+        
+        const data = await response.json();
+        addChatMessage('assistant', data.reply);
+        
+        // Execute actions
+        if (data.actions && Array.isArray(data.actions)) {
+          data.actions.forEach(executeAction);
+        }
+        
+      } catch (error) {
+        console.error('Chat error:', error);
+        addChatMessage('assistant', 'Entschuldigung, ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+      }
+    }
+    
+    function executeAction(action) {
+      switch (action.type) {
+        case 'setDecision':
+          const row = document.querySelector(`#transcript-body tr:nth-child(${action.index + 1})`);
+          if (row) {
+            setDecision(row, action.decision);
+          }
+          break;
+          
+        case 'setDecisionRange':
+          for (let i = action.from; i <= action.to; i++) {
+            const rangeRow = document.querySelector(`#transcript-body tr:nth-child(${i + 1})`);
+            if (rangeRow) {
+              setDecision(rangeRow, action.decision);
+            }
+          }
+          break;
+          
+        case 'seekTo':
+          const videoPlayer = document.getElementById('video-player');
+          const audioPlayer = document.getElementById('audio-player');
+          if (videoPlayer && audioPlayer) {
+            videoPlayer.currentTime = action.seconds;
+            audioPlayer.currentTime = action.seconds;
+            videoPlayer.play().catch(e => console.log('Video play failed:', e));
+            audioPlayer.play().catch(e => console.log('Audio play failed:', e));
+          }
+          break;
+          
+        case 'addNote':
+          const noteRow = document.querySelector(`#transcript-body tr:nth-child(${action.index + 1})`);
+          if (noteRow) {
+            const noteInput = noteRow.querySelector('input[type="text"]');
+            if (noteInput) {
+              noteInput.value = action.note;
+              noteInput.setAttribute('data-note', action.note);
+            }
+          }
+          break;
+          
+        case 'clearAll':
+          const allRows = document.querySelectorAll('#transcript-body tr');
+          allRows.forEach(row => setDecision(row, null));
+          break;
+      }
+    }
+    
+    function toggleSpeechRecognition() {
+      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        addChatMessage('assistant', 'Mikrofon nicht verfügbar');
+        return;
+      }
+      
+      if (isListening) {
+        stopSpeechRecognition();
+      } else {
+        startSpeechRecognition();
+      }
+    }
+    
+    function startSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      speechRecognition = new SpeechRecognition();
+      speechRecognition.lang = 'de-DE';
+      speechRecognition.continuous = false;
+      speechRecognition.interimResults = false;
+      
+      speechRecognition.onstart = () => {
+        isListening = true;
+        const micBtn = document.getElementById('chat-mic-btn');
+        if (micBtn) {
+          micBtn.style.background = '#5b5ef4';
+          micBtn.style.color = 'white';
+        }
+      };
+      
+      speechRecognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const input = document.getElementById('chat-input');
+        if (input) {
+          input.value = transcript;
+          sendChatMessage();
+        }
+      };
+      
+      speechRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        addChatMessage('assistant', 'Spracherkennung fehlgeschlagen');
+      };
+      
+      speechRecognition.onend = () => {
+        stopSpeechRecognition();
+      };
+      
+      speechRecognition.start();
+    }
+    
+    function stopSpeechRecognition() {
+      if (speechRecognition) {
+        speechRecognition.stop();
+      }
+      isListening = false;
+      const micBtn = document.getElementById('chat-mic-btn');
+      if (micBtn) {
+        micBtn.style.background = '';
+        micBtn.style.color = '';
+      }
+    }
+    
+    // Wire up chat input events
+    document.addEventListener('DOMContentLoaded', function() {
+      const chatInput = document.getElementById('chat-input');
+      const chatSendBtn = document.getElementById('chat-send-btn');
+      
+      if (chatInput) {
+        chatInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            sendChatMessage();
+          }
+        });
+      }
+      
+      if (chatSendBtn) {
+        chatSendBtn.addEventListener('click', sendChatMessage);
+      }
+    });
 
     // ── Init ──────────────────────────────────────────────────────────────────
     browse(null, 'Alle Ordner');
