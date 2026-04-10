@@ -1013,6 +1013,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: driveUrl, folderId: currentFolderId }),
         });
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) throw new Error('server_starting');
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
         return data;
@@ -1023,15 +1025,15 @@
         try {
           data = await doTranscribeRequest();
         } catch (firstErr) {
-          // Likely cold start — wait and retry once
-          setProgress('Starte…', 5, 'Server startet… bitte 20 Sekunden warten ☕');
-          await new Promise(r => setTimeout(r, 20000));
+          // Likely cold start — wait and retry
+          setProgress('Starte…', 5, 'Server startet… bitte 35 Sekunden warten ☕');
+          await new Promise(r => setTimeout(r, 35000));
           data = await doTranscribeRequest();
         }
         jobId = data.jobId;
         activeJobId = jobId;
       } catch (err) {
-        showError('Server nicht erreichbar: ' + err.message);
+        showError('Server nicht erreichbar – bitte Seite neu laden und erneut versuchen.');
         return;
       }
 
