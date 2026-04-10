@@ -536,10 +536,12 @@
     <p style="margin:8px 0 0;font-size:0.8rem;color:#999;">Video in Drive anklicken → oben rechts „⋮" → „Link kopieren" → hier einfügen</p>
   </div>
 
-  <!-- File browser (hidden — Drive API not configured) -->
-  <div style="display:none">
+  <!-- File browser -->
+  <div class="card">
     <div class="breadcrumb" id="breadcrumb"></div>
-    <ul class="file-list" id="file-list"></ul>
+    <ul class="file-list" id="file-list">
+      <li><span class="loading-msg">Lade Ordner…</span></li>
+    </ul>
   </div>
 
   <!-- Progress -->

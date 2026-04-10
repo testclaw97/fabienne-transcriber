@@ -457,29 +457,37 @@ async function browseDriveFolder(folderId) {
     timeout: 15_000,
   });
 
-  const content = response.data.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'");
-
-  const idPattern = /\[null,"(1[a-zA-Z0-9_-]{25,})"\],null,null,null,"(application\/vnd\.google-apps\.folder|video\/[^"]+)"/g;
+  const raw = response.data;
   const items = [];
   const seen = new Set();
-  let m;
 
-  while ((m = idPattern.exec(content)) !== null) {
-    const id = m[1];
-    const mime = m[2];
-    if (seen.has(id)) continue;
-    seen.add(id);
-
-    const chunk = content.slice(m.index, m.index + 600);
-    const nameMatch = chunk.match(/\[\["([^"]+)",null,true\]/);
-    if (!nameMatch) continue;
-
-    const name = nameMatch[1].trim();
-    const isFolder = mime === 'application/vnd.google-apps.folder';
-    const isVideo = VIDEO_MIMES.has(mime);
-
-    if (isFolder || isVideo) {
-      items.push({ id, name, type: isFolder ? 'folder' : 'file', mime });
+  // New method: parse _DRIVE_ivd embedded JSON
+  const ivdMatch = raw.match(/_DRIVE_ivd'\] = '([\s\S]+?)';/);
+  if (ivdMatch) {
+    try {
+      // Decode hex escapes (\x5b → [) then unescape JSON string escapes
+      const decoded = ivdMatch[1]
+        .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+        .replace(/\\\//g, '/');
+      const parsed = JSON.parse(decoded);
+      // Each entry: [id, [parentId], name, mimeType, ...]
+      const entries = Array.isArray(parsed[0]) ? parsed : [parsed];
+      const flat = entries.flat(1);
+      for (const entry of flat) {
+        if (!Array.isArray(entry) || typeof entry[0] !== 'string' || typeof entry[2] !== 'string' || typeof entry[3] !== 'string') continue;
+        const id = entry[0];
+        const name = entry[2].trim();
+        const mime = entry[3];
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const isFolder = mime === 'application/vnd.google-apps.folder';
+        const isVideo = VIDEO_MIMES.has(mime);
+        if (isFolder || isVideo) {
+          items.push({ id, name, type: isFolder ? 'folder' : 'file', mime });
+        }
+      }
+    } catch (e) {
+      console.error('_DRIVE_ivd parse error:', e.message);
     }
   }
 
