@@ -1180,7 +1180,7 @@
       box.style.display = 'block';
     }
 
-function renderTranscript(data) {
+    function renderTranscript(data) {
       transcriptData = data;
 
       const tbody = document.getElementById("transcript-body");
@@ -1208,7 +1208,7 @@ function renderTranscript(data) {
       updateGenerateCutButton();
     }
 
-
+    function renderAiGrouping(aiGrouping, transcript) {
       if (!aiGrouping) return;
       
       const tbody = document.getElementById('transcript-body');
@@ -1832,10 +1832,7 @@ function renderTranscript(data) {
         initTranscriptSync();
       }
     }
-    
 
-    }
-    
     // ── AI Chat Functions ─────────────────────────────────────────────────────
     
     let chatHistory = [];
