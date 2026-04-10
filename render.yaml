@@ -10,5 +10,11 @@ services:
         sync: false
       - key: DRIVE_FOLDER_ID
         value: 1T1TrG_5JpMolwTEm2oiKKH4C-n7fLtar
-      - key: PORT
-        value: 3000
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
