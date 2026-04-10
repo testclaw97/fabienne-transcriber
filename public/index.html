@@ -269,6 +269,13 @@
     }
     .ts-cell:hover { color: #4547d4; text-decoration: underline; }
     .text-cell { font-size: 0.9rem; line-height: 1.5; }
+    .text-en {
+      font-size: 0.78rem;
+      color: #888;
+      font-style: italic;
+      margin-top: 3px;
+      line-height: 1.4;
+    }
     .text-cell[contenteditable="true"] {
       outline: none;
       border-radius: 4px;
@@ -352,12 +359,12 @@
       white-space: nowrap;
     }
     .btn-decision:hover { transform: translateY(-1px); }
-    .btn-keep { color: #166534; }
-    .btn-keep:hover { background: #dcfce7; border-color: #86efac; color: #166534; }
-    .btn-keep.active { background: #16a34a; border-color: #16a34a; color: #fff; }
-    .btn-delete-btn { color: #991b1b; }
-    .btn-delete-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
-    .btn-delete-btn.active { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .btn-keep { color: #166534; background: #f0fdf4; border-color: #86efac; }
+    .btn-keep:hover { background: #bbf7d0; border-color: #16a34a; color: #14532d; }
+    .btn-keep.active { background: #16a34a !important; border-color: #14532d !important; color: #fff !important; font-weight: 800; box-shadow: 0 0 0 3px rgba(22,163,74,0.35); }
+    .btn-delete-btn { color: #991b1b; background: #fff5f5; border-color: #fca5a5; }
+    .btn-delete-btn:hover { background: #fecaca; border-color: #dc2626; color: #7f1d1d; }
+    .btn-delete-btn.active { background: #dc2626 !important; border-color: #7f1d1d !important; color: #fff !important; font-weight: 800; box-shadow: 0 0 0 3px rgba(220,38,38,0.35); }
 
     /* Decision states for rows */
     tr[data-decision="keep"] {
@@ -1152,6 +1159,9 @@
       if (lastAiGrouping && lastAiGrouping.suggestions) {
         applyAiSuggestions(lastAiGrouping.suggestions);
       }
+      if (lastAiGrouping && lastAiGrouping.translations) {
+        applyTranslations(lastAiGrouping.translations);
+      }
     }
 
     function renderAiGrouping(aiGrouping, transcript) {
@@ -1262,10 +1272,15 @@
       textCell.className = 'text-cell';
       textCell.contentEditable = 'true';
       textCell.textContent = row.text;
-      textCell.oninput = () => { 
+      textCell.oninput = () => {
         transcriptData[i].text = textCell.textContent;
         triggerAutoSave();
       };
+      // English translation line (filled later by applyTranslations)
+      const enDiv = document.createElement('div');
+      enDiv.className = 'text-en';
+      enDiv.dataset.translationFor = i;
+      textCell.appendChild(enDiv);
 
       // Notes cell with textarea
       const noteCell = document.createElement('td');
@@ -1365,10 +1380,42 @@
     }
 
     function downloadTxt() {
-      const blob = new Blob([buildFullText()], { type: 'text/plain;charset=utf-8' });
+      const videoName = activeFileName || 'Video';
+      const now = new Date().toLocaleString('de-DE');
+      const lines = [`TRANSKRIPT — ${videoName}`, `Erstellt: ${now}`, ''];
+
+      const dLabel = { keep: '✅ BEHALTEN', delete: '🗑️ LÖSCHEN', unmarked: '   —' };
+
+      transcriptData.forEach((seg, i) => {
+        const row = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
+        const decision = row ? (row.getAttribute('data-decision') || 'unmarked') : 'unmarked';
+        const note = row ? (row.getAttribute('data-note') || '') : '';
+        const enEl = document.querySelector(`.text-en[data-translation-for="${i}"]`);
+        const enText = enEl ? enEl.textContent.trim() : '';
+
+        lines.push(`[${seg.timestamp}] ${dLabel[decision] || '   —'}`);
+        lines.push(`DE: ${seg.text}`);
+        if (enText) lines.push(`EN: ${enText}`);
+        if (note) lines.push(`Notiz: ${note}`);
+        lines.push('');
+      });
+
+      // Summary
+      const kept = transcriptData.filter((_, i) => {
+        const r = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
+        return r && r.getAttribute('data-decision') === 'keep';
+      }).length;
+      const deleted = transcriptData.filter((_, i) => {
+        const r = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
+        return r && r.getAttribute('data-decision') === 'delete';
+      }).length;
+      lines.push(`---`);
+      lines.push(`Gesamt: ${transcriptData.length} Segmente — ${kept} Behalten / ${deleted} Löschen / ${transcriptData.length - kept - deleted} nicht markiert`);
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (activeFileName || (currentMode === 'client' ? 'transkript' : 'transcript')) + translations[currentMode][' – Notizen.txt'];
+      a.download = videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '_Transkript.txt';
       a.click();
       URL.revokeObjectURL(a.href);
     }
@@ -1857,15 +1904,21 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     // ── AI Suggestions ────────────────────────────────────────────────────────
 
     function applyAiSuggestions(suggestions) {
-      // Apply DeepSeek-suggested keep/delete decisions to rows that aren't already marked
       const rows = document.querySelectorAll('#transcript-body tr[data-index]');
       rows.forEach(row => {
         const idx = row.dataset.index;
         const suggestion = suggestions[String(idx)];
         if (suggestion && !row.getAttribute('data-decision')) {
           setDecision(row, suggestion);
-          row.setAttribute('data-suggested', suggestion); // track it was auto-marked
+          row.setAttribute('data-suggested', suggestion);
         }
+      });
+    }
+
+    function applyTranslations(translations) {
+      Object.entries(translations).forEach(([idx, enText]) => {
+        const el = document.querySelector(`.text-en[data-translation-for="${idx}"]`);
+        if (el && enText) el.textContent = enText;
       });
     }
 

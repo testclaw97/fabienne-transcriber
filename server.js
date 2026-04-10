@@ -181,7 +181,7 @@ async function startTranscription(audioUrl) {
       audio_url: audioUrl,
       language: 'de',
       diarization: false,
-      words: true,
+      disfluencies: true,
     },
     {
       headers: {
@@ -222,16 +222,25 @@ async function pollTranscription(transcriptionId, jobId) {
 // ── Format Gladia result into our transcript shape ───────────────────────────
 
 function formatTranscript(gladiaResult) {
-  // Prefer word-level data (enabled via words:true in startTranscription)
-  const words = gladiaResult?.transcription?.words || [];
+  const utterances = gladiaResult?.transcription?.utterances || [];
 
-  if (words.length > 0) {
-    // Split into short sentence-based segments using punctuation + max 10s cap
+  // Extract all words from utterances (Gladia v2 stores words inside each utterance)
+  const allWords = [];
+  for (const u of utterances) {
+    if (u.words && u.words.length > 0) {
+      for (const w of u.words) {
+        allWords.push({ word: w.word, start: w.start, end: w.end });
+      }
+    }
+  }
+
+  if (allWords.length > 0) {
+    // Split into short sentence-based segments: break on punctuation (min 2s) or max 10s
     const segments = [];
     let cur = [];
     let segStart = null;
 
-    for (const w of words) {
+    for (const w of allWords) {
       if (segStart === null) segStart = w.start;
       cur.push(w.word);
 
@@ -249,7 +258,6 @@ function formatTranscript(gladiaResult) {
       }
     }
 
-    // Flush remaining words
     if (cur.length > 0 && segStart !== null) {
       segments.push({
         start: segStart,
@@ -261,9 +269,8 @@ function formatTranscript(gladiaResult) {
     return segments;
   }
 
-  // Fallback: utterances (no word-level data)
-  const utterances = gladiaResult?.transcription?.utterances;
-  if (utterances && utterances.length > 0) {
+  // Fallback: use utterances as-is (no word-level data available)
+  if (utterances.length > 0) {
     return utterances.map(u => ({
       start: u.start,
       timestamp: formatTimestamp(u.start),
@@ -294,7 +301,7 @@ async function analyseWithDeepSeek(transcript) {
 
     const systemPrompt = 'You are a video transcript analyser. You will receive numbered transcript segments. Return ONLY valid JSON, no markdown, no explanation.';
     
-    const userPrompt = `Analyse these German transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... }, "suggestions": { "0": "keep", "1": "delete", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). (6) suggestions: for EVERY segment index as a string key, assign "delete" if the segment is a repetition, restart, filler phrase (ähm, also nochmal, ich meine, warte mal, etc.), false start, off-topic remark, or private conversation — otherwise assign "keep". When in doubt, assign "keep". Here are the segments: ${JSON.stringify(segments)}`;
+    const userPrompt = `Analyse these German transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... }, "suggestions": { "0": "keep", "1": "delete", ... }, "translations": { "0": "English translation", "1": "English translation", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). (6) suggestions: for EVERY segment index as a string key, assign "delete" if the segment is a repetition, restart, filler phrase (ähm, also nochmal, ich meine, warte mal, etc.), false start, off-topic remark, or private conversation — otherwise assign "keep". When in doubt, assign "keep". (7) translations: for EVERY segment index as a string key, provide a concise English translation of the German text — keep it natural, not literal. Here are the segments: ${JSON.stringify(segments)}`;
 
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
