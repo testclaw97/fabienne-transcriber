@@ -2108,13 +2108,18 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     
     // ── Transcript Sync Functions ──────────────────────────────────────────────
     
+    function getActivePlayer() {
+      const sticky = document.getElementById('sticky-audio-player');
+      return (window.innerWidth <= 800 && sticky && sticky.src) ? sticky : document.getElementById('audio-player');
+    }
+
     function initTranscriptSync() {
       stopTranscriptSync();
       syncInterval = setInterval(syncTranscriptWithMedia, 300);
-      const audioPlayer = document.getElementById("audio-player");
-      audioPlayer.addEventListener("ended", stopTranscriptSync);
-      audioPlayer.addEventListener("pause", stopTranscriptSync);
-      audioPlayer.addEventListener("play", () => {
+      const player = getActivePlayer();
+      player.addEventListener("ended", stopTranscriptSync);
+      player.addEventListener("pause", stopTranscriptSync);
+      player.addEventListener("play", () => {
         if (!syncInterval) initTranscriptSync();
       });
     }
@@ -2134,9 +2139,9 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     }
     
     function syncTranscriptWithMedia() {
-      const audioPlayer = document.getElementById("audio-player");
-      if (audioPlayer.paused) return;
-      const currentTime = audioPlayer.currentTime;
+      const player = getActivePlayer();
+      if (player.paused) return;
+      const currentTime = player.currentTime;
 
       // Find the segment that contains currentTime
       let playingRowIndex = -1;
