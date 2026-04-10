@@ -616,6 +616,7 @@
             <div class="toolbar-sep"></div>
             <button class="btn-tool" onclick="copyAll()">Kopieren</button>
             <button class="btn-save" onclick="downloadTxt()">Notizen speichern</button>
+            <button class="btn-save" onclick="generateEditBrief()" style="background:#16a34a;" title="Export edit instructions for video editor">Edit Brief</button>
           </div>
         </div>
         <table class="font-md" id="transcript-table">
@@ -1430,6 +1431,110 @@
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (activeFileName || (currentMode === 'client' ? 'transkript' : 'transcript')) + translations[currentMode][' – Notizen.txt'];
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function formatTimeLocal(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function generateEditBrief() {
+      if (!transcriptData || transcriptData.length === 0) return;
+
+      const videoName = activeFileName || 'Video';
+      const now = new Date().toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+      // Collect all segments with decisions + notes from DOM
+      const segments = transcriptData.map((seg, i) => {
+        const row = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
+        const decision = row ? (row.getAttribute('data-decision') || 'unmarked') : 'unmarked';
+        const note = row ? (row.getAttribute('data-note') || '') : '';
+        const endSec = i + 1 < transcriptData.length ? transcriptData[i + 1].start : seg.start + 30;
+        return { index: i, start: seg.start, end: endSec, timestamp: seg.timestamp, endTimestamp: formatTimeLocal(endSec), text: seg.text, decision, note };
+      });
+
+      // Group by AI paragraphs if available, else one group
+      let groups = [];
+      if (lastAiGrouping && lastAiGrouping.paragraphs && lastAiGrouping.paragraphs.length > 0) {
+        lastAiGrouping.paragraphs.forEach(para => {
+          const segs = (para.segmentIndices || []).map(i => segments[i]).filter(Boolean);
+          if (segs.length > 0) {
+            groups.push({ label: para.labelEn || para.labelDe || 'Section', startTime: segs[0].timestamp, endTime: segs[segs.length - 1].endTimestamp, segments: segs });
+          }
+        });
+      }
+      if (groups.length === 0) {
+        groups = [{ label: 'Full Video', startTime: segments[0].timestamp, endTime: segments[segments.length - 1].endTimestamp, segments }];
+      }
+
+      // Stats
+      const counts = { keep: 0, cut: 0, delete: 0, unmarked: 0 };
+      let removedSec = 0;
+      segments.forEach(s => {
+        counts[s.decision] = (counts[s.decision] || 0) + 1;
+        if (s.decision === 'cut' || s.decision === 'delete') removedSec += s.end - s.start;
+      });
+      const removedStr = removedSec >= 60 ? Math.floor(removedSec / 60) + 'm ' + (removedSec % 60) + 's' : removedSec + 's';
+
+      const dEmoji = { keep: '✅ KEEP', cut: '✂️ CUT', delete: '🗑️ DELETE', unmarked: '— unmarked' };
+      const dColor = { keep: '#16a34a', cut: '#d97706', delete: '#dc2626', unmarked: '#9ca3af' };
+
+      const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Edit Brief — ${esc(videoName)}</title>
+<style>
+body{font-family:'Segoe UI',sans-serif;max-width:860px;margin:0 auto;padding:32px 24px;background:#f9fafb;color:#111;}
+h1{font-size:1.5rem;margin:0 0 4px;}
+.meta{color:#6b7280;font-size:.9rem;margin-bottom:24px;}
+.summary{background:#f3f4f6;border-radius:8px;padding:16px 20px;margin-bottom:32px;font-size:.95rem;line-height:1.8;}
+.sec-hdr{border-top:2px solid #e5e7eb;margin-top:28px;padding-top:12px;margin-bottom:8px;}
+.sec-title{font-weight:700;font-size:1.05rem;}
+.sec-time{color:#6b7280;font-size:.85rem;}
+.seg{border-left:4px solid #e5e7eb;margin:8px 0;padding:8px 14px;background:#fff;border-radius:0 6px 6px 0;}
+.seg.keep{border-left-color:#16a34a;}.seg.cut{border-left-color:#d97706;}.seg.delete{border-left-color:#dc2626;}.seg.unmarked{border-left-color:#d1d5db;}
+.seg-hdr{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+.seg-time{font-weight:600;font-size:.85rem;color:#374151;min-width:130px;}
+.seg-dec{font-weight:700;font-size:.85rem;}
+.seg-text{font-size:.92rem;color:#374151;line-height:1.5;}
+.seg-note{font-size:.82rem;color:#6b7280;margin-top:4px;font-style:italic;}
+.seg-note::before{content:"Note: ";font-weight:600;}
+</style></head><body>
+<h1>Edit Brief — ${esc(videoName)}</h1>
+<div class="meta">Erstellt: ${now}</div>
+<div class="summary">
+<strong>Summary:</strong> ${segments.length} segments`;
+
+      if (counts.keep) html += ` &nbsp;✅ <span style="color:#16a34a">${counts.keep} KEEP</span>`;
+      if (counts.cut) html += ` &nbsp;✂️ <span style="color:#d97706">${counts.cut} CUT</span>`;
+      if (counts.delete) html += ` &nbsp;🗑️ <span style="color:#dc2626">${counts.delete} DELETE</span>`;
+      if (counts.unmarked) html += ` &nbsp;<span style="color:#9ca3af">${counts.unmarked} unmarked</span>`;
+      if (counts.cut + counts.delete > 0) html += `<br>Total to remove: ~${removedStr}`;
+      html += `</div>`;
+
+      groups.forEach(g => {
+        html += `<div class="sec-hdr"><div class="sec-title">📍 ${esc(g.label)}</div><div class="sec-time">${g.startTime} – ${g.endTime}</div></div>`;
+        g.segments.forEach(s => {
+          html += `<div class="seg ${s.decision}">
+<div class="seg-hdr"><span class="seg-time">[${s.timestamp} – ${s.endTimestamp}]</span><span class="seg-dec" style="color:${dColor[s.decision]}">${dEmoji[s.decision] || s.decision}</span></div>
+<div class="seg-text">${esc(s.text)}</div>${s.note ? `<div class="seg-note">${esc(s.note)}</div>` : ''}</div>`;
+        });
+      });
+
+      html += `</body></html>`;
+
+      // Open in new tab
+      const win = window.open('', '_blank');
+      if (win) { win.document.write(html); win.document.close(); }
+
+      // Download as file
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'EditBrief-' + videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '.html';
       a.click();
       URL.revokeObjectURL(a.href);
     }
