@@ -1154,6 +1154,9 @@
             // Set audio source
             const audioPlayer = document.getElementById('audio-player');
             audioPlayer.src = `/media/${jobId}/audio`;
+            audioPlayer.onerror = () => {
+              document.getElementById('media-title').textContent = activeFileName + ' – Audio nicht verfügbar (Sitzung abgelaufen, bitte neu transkribieren)';
+            };
             document.getElementById('media-title').textContent = activeFileName;
 
             // Mobile sticky audio bar
