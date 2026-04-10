@@ -1083,8 +1083,9 @@
 
       let errorTimeout = null;
       evtSource.onerror = () => {
-        // EventSource auto-reconnects — only show error if it stays broken for 30s
+        // EventSource auto-reconnects — only show error if it stays broken for 90s
         if (errorTimeout) return;
+        document.getElementById('progress-message').textContent = 'Verbindung unterbrochen – versuche erneut…';
         errorTimeout = setTimeout(() => {
           if (evtSource.readyState !== EventSource.OPEN) {
             evtSource.close();
@@ -1092,7 +1093,7 @@
             document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
             showError('Verbindung zum Server unterbrochen.');
           }
-        }, 30000);
+        }, 90000);
       };
     }
 
