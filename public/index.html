@@ -893,10 +893,24 @@
         '<li><span class="loading-msg">Lade…</span></li>';
 
       const query = folderId ? `?folderId=${folderId}` : '';
-      try {
+      const doBrowseRequest = async () => {
         const res = await fetch(`/api/browse${query}`);
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) throw new Error('server_starting');
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
+        return data;
+      };
+      try {
+        let data;
+        try {
+          data = await doBrowseRequest();
+        } catch (firstErr) {
+          document.getElementById('file-list').innerHTML =
+            '<li><span class="loading-msg">Server startet… bitte warten ☕</span></li>';
+          await new Promise(r => setTimeout(r, 35000));
+          data = await doBrowseRequest();
+        }
         renderFileList(data.items);
       } catch (err) {
         document.getElementById('file-list').innerHTML =
