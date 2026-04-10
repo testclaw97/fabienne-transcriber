@@ -1593,7 +1593,11 @@ h1{font-size:1.5rem;margin:0 0 4px;}
           body: JSON.stringify({ content: txtLines.join('\n'), fileName: txtFileName, folderId: currentFolderId })
         });
         const data = await r.json();
-        if (data.success) showToast('✓ Notes uploaded to Drive');
+        if (data.success) {
+          const modal = document.getElementById('drive-success-modal');
+          document.getElementById('drive-success-link').href = data.link || '#';
+          modal.style.display = 'flex';
+        }
         else showToast('Fehler: ' + (data.error || 'Unbekannt'));
       } catch (e) {
         showToast('Drive-Fehler: ' + e.message);
@@ -2064,6 +2068,18 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     // Initialize drag selection when transcript is rendered
     // We'll call this from renderTranscript
   </script>
+
+  <div id="drive-success-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);text-align:center;">
+      <div style="font-size:2rem;margin-bottom:10px;">✅</div>
+      <p style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Notes uploaded to Drive</p>
+      <p style="margin:0 0 20px;font-size:0.9rem;color:#6b7280;">Your notes have been saved successfully.</p>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <a id="drive-success-link" href="#" target="_blank" style="padding:9px 20px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open in Drive</a>
+        <button onclick="document.getElementById('drive-success-modal').style.display='none'" style="padding:9px 20px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:#fff;font-size:0.9rem;">Schließen</button>
+      </div>
+    </div>
+  </div>
 
   <div id="safety-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
