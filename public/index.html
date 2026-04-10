@@ -16,6 +16,7 @@
       flex-direction: column;
       align-items: center;
       padding: 40px 16px 80px;
+      overflow-x: hidden;
     }
 
     h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 6px; }
@@ -479,11 +480,11 @@
     @media (max-width: 800px) {
       .editor-layout { flex-direction: column; }
       .media-panel, .transcript-panel { width: 100%; position: static; }
-      .toolbar { gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+      .toolbar { gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
       .toolbar-sep { display: none; }
       .result-header { flex-direction: column; gap: 10px; }
-      /* Hide note column on medium screens — transcript text + decision is enough */
-      .note-col, .note-cell { display: none; }
+      /* Hide row number column on mobile — saves space */
+      .num-col, .num-cell { display: none; }
     }
 
     @media (max-width: 480px) {
@@ -515,17 +516,6 @@
 
   <h1>Video Transkription</h1>
   <p class="subtitle">Google Drive Video-Link einfügen → Transkript erhalten</p>
-
-  <!-- URL paste input -->
-  <div class="card" id="url-input-card">
-    <p style="margin:0 0 10px;font-weight:600;font-size:0.95rem;">Video-URL einfügen</p>
-    <div class="input-row" style="display:flex;gap:8px;align-items:center;">
-      <input type="text" id="drive-url-input" placeholder="https://drive.google.com/file/d/..." onkeydown="if(event.key==='Enter')startTranscriptionFromUrl()" style="flex:1;padding:12px 14px;border:1px solid #ccc;border-radius:8px;font-size:0.95rem;">
-      <button onclick="startTranscriptionFromUrl()" style="padding:12px 22px;background:#5b5ef4;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:1rem;white-space:nowrap;">▶ Starten</button>
-    </div>
-    <p id="url-error" style="margin:8px 0 0;font-size:0.85rem;color:#e53e3e;display:none;"></p>
-    <p style="margin:8px 0 0;font-size:0.8rem;color:#999;">Video in Drive anklicken → oben rechts „⋮" → „Link kopieren" → hier einfügen</p>
-  </div>
 
   <!-- File browser -->
   <div class="card">

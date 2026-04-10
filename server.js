@@ -622,7 +622,7 @@ app.get('/progress/:jobId', (req, res) => {
   }
 
   // Keep connection alive
-  const keepAlive = setInterval(() => res.write(': ping\n\n'), 20_000);
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 10_000);
 
   job.clients.push(res);
 
