@@ -6,6 +6,7 @@
   <title>Video Transkription</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { overflow-x: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -177,11 +178,24 @@
     .transcript-panel {
       width: 60%;
       min-width: 0;
+      overflow-x: hidden;
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.08);
       padding: 20px 24px;
     }
+
+    /* Below-transcript action buttons */
+    .transcript-actions {
+      display: none;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #f0f0f0;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .transcript-actions.visible { display: flex; }
 
     .result-header {
       display: flex;
@@ -505,8 +519,8 @@
     @media (max-width: 800px) {
       .editor-layout { flex-direction: column; }
       .media-panel, .transcript-panel { width: 100%; position: static; }
-      /* Hide the in-panel audio player on mobile — it moves to sticky bar */
-      .audio-player-container { display: none; }
+      /* Keep in-panel audio hidden on mobile — sticky bar handles it */
+      .audio-player-container { visibility: hidden; height: 0; overflow: hidden; }
       .toolbar { gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
       .toolbar-sep { display: none; }
       .result-header { flex-direction: column; gap: 10px; }
@@ -609,8 +623,6 @@
             <button class="btn-tool" onclick="setFont('xl')">A++</button>
             <div class="toolbar-sep"></div>
             <button class="btn-tool" onclick="copyAll()">Kopieren</button>
-            <button class="btn-tool" onclick="downloadTxt()">Notizen herunterladen</button>
-            <button class="btn-save" onclick="saveToDrive()">Notizen in Drive speichern</button>
           </div>
         </div>
         <table class="font-md" id="transcript-table">
@@ -625,6 +637,10 @@
           </thead>
           <tbody id="transcript-body"></tbody>
         </table>
+        <div class="transcript-actions" id="transcript-actions">
+          <button class="btn-tool" onclick="downloadTxt()">Notizen herunterladen</button>
+          <button class="btn-save" id="btn-save-drive" onclick="saveToDrive()">Notizen in Drive speichern</button>
+        </div>
       </div>
 
     </div>
@@ -635,6 +651,7 @@
   <!-- Mobile sticky audio bar -->
   <div id="sticky-audio-bar">
     <div id="sticky-audio-title"></div>
+    <audio id="sticky-audio-player" controls preload="none" style="width:100%;height:36px;"></audio>
   </div>
 
   <!-- Floating toolbar for drag selection -->
@@ -1137,12 +1154,22 @@
             audioPlayer.src = `/media/${jobId}/audio`;
             document.getElementById('media-title').textContent = activeFileName;
 
-            // On mobile: move audio player into sticky bottom bar
+            // Mobile sticky audio bar
             if (window.innerWidth <= 800) {
               const bar = document.getElementById('sticky-audio-bar');
+              const stickyPlayer = document.getElementById('sticky-audio-player');
               document.getElementById('sticky-audio-title').textContent = activeFileName;
-              bar.appendChild(audioPlayer);
+              stickyPlayer.src = audioPlayer.src;
               bar.classList.add('visible');
+              // Sync the two audio players
+              let syncLock = false;
+              function withLock(fn) { if (syncLock) return; syncLock = true; fn(); setTimeout(() => syncLock = false, 120); }
+              audioPlayer.addEventListener('play',   () => withLock(() => { stickyPlayer.currentTime = audioPlayer.currentTime; stickyPlayer.play().catch(()=>{}); }));
+              audioPlayer.addEventListener('pause',  () => withLock(() => stickyPlayer.pause()));
+              audioPlayer.addEventListener('seeked', () => withLock(() => stickyPlayer.currentTime = audioPlayer.currentTime));
+              stickyPlayer.addEventListener('play',  () => withLock(() => { audioPlayer.currentTime = stickyPlayer.currentTime; audioPlayer.play().catch(()=>{}); }));
+              stickyPlayer.addEventListener('pause', () => withLock(() => audioPlayer.pause()));
+              stickyPlayer.addEventListener('seeked',() => withLock(() => audioPlayer.currentTime = stickyPlayer.currentTime));
             }
 
             // Initialize transcript sync
@@ -1208,6 +1235,7 @@
       });
 
       document.getElementById("result-section").style.display = "block";
+      document.getElementById("transcript-actions").classList.add("visible");
       document.getElementById("result-section").scrollIntoView({ behavior: "smooth", block: "start" });
 
       // Initialize drag selection after rendering
