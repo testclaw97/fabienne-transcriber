@@ -298,13 +298,14 @@
       cursor: default;
       user-select: none;
     }
-    .text-cell[contenteditable="true"] {
+    .text-below-row { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; }
+    .text-editable[contenteditable="true"] {
       outline: none;
       border-radius: 4px;
       padding: 4px 6px;
       transition: background 0.15s;
     }
-    .text-cell[contenteditable="true"]:focus { background: #f0f0ff; }
+    .text-editable[contenteditable="true"]:focus { background: #f0f0ff; outline: none; }
 
     .note-cell { width: 180px; padding: 6px 4px; }
     .note-input {
@@ -631,8 +632,6 @@
               <th class="num-col">#</th>
               <th class="ts-col">Zeit</th>
               <th>Text</th>
-              <th class="note-col">Notiz</th>
-              <th>Entscheidung</th>
             </tr>
           </thead>
           <tbody id="transcript-body"></tbody>
@@ -1161,15 +1160,18 @@
               document.getElementById('sticky-audio-title').textContent = activeFileName;
               stickyPlayer.src = audioPlayer.src;
               bar.classList.add('visible');
-              // Sync the two audio players
+              // Sync the two audio players (abort previous listeners to avoid stacking)
+              if (audioPlayer._syncAbort) audioPlayer._syncAbort.abort();
+              audioPlayer._syncAbort = new AbortController();
+              const { signal: syncSignal } = audioPlayer._syncAbort;
               let syncLock = false;
               function withLock(fn) { if (syncLock) return; syncLock = true; fn(); setTimeout(() => syncLock = false, 120); }
-              audioPlayer.addEventListener('play',   () => withLock(() => { stickyPlayer.currentTime = audioPlayer.currentTime; stickyPlayer.play().catch(()=>{}); }));
-              audioPlayer.addEventListener('pause',  () => withLock(() => stickyPlayer.pause()));
-              audioPlayer.addEventListener('seeked', () => withLock(() => stickyPlayer.currentTime = audioPlayer.currentTime));
-              stickyPlayer.addEventListener('play',  () => withLock(() => { audioPlayer.currentTime = stickyPlayer.currentTime; audioPlayer.play().catch(()=>{}); }));
-              stickyPlayer.addEventListener('pause', () => withLock(() => audioPlayer.pause()));
-              stickyPlayer.addEventListener('seeked',() => withLock(() => audioPlayer.currentTime = stickyPlayer.currentTime));
+              audioPlayer.addEventListener('play',   () => withLock(() => { stickyPlayer.currentTime = audioPlayer.currentTime; stickyPlayer.play().catch(()=>{}); }), { signal: syncSignal });
+              audioPlayer.addEventListener('pause',  () => withLock(() => stickyPlayer.pause()), { signal: syncSignal });
+              audioPlayer.addEventListener('seeked', () => withLock(() => stickyPlayer.currentTime = audioPlayer.currentTime), { signal: syncSignal });
+              stickyPlayer.addEventListener('play',  () => withLock(() => { audioPlayer.currentTime = stickyPlayer.currentTime; audioPlayer.play().catch(()=>{}); }), { signal: syncSignal });
+              stickyPlayer.addEventListener('pause', () => withLock(() => audioPlayer.pause()), { signal: syncSignal });
+              stickyPlayer.addEventListener('seeked',() => withLock(() => audioPlayer.currentTime = stickyPlayer.currentTime), { signal: syncSignal });
             }
 
             // Initialize transcript sync
@@ -1359,10 +1361,13 @@
 
       const textCell = document.createElement('td');
       textCell.className = 'text-cell';
-      textCell.contentEditable = 'true';
-      textCell.textContent = row.text;
-      textCell.oninput = () => {
-        transcriptData[i].text = textCell.textContent;
+
+      const textDiv = document.createElement('div');
+      textDiv.className = 'text-editable';
+      textDiv.contentEditable = 'true';
+      textDiv.textContent = row.text;
+      textDiv.oninput = () => {
+        transcriptData[i].text = textDiv.textContent;
         triggerAutoSave();
       };
 
@@ -1373,30 +1378,28 @@
         fillerBadge.className = 'filler-badge';
         fillerBadge.title = 'Enthält Füllwörter (ähm, äh, hm…)';
         fillerBadge.textContent = '💬 Füllwörter';
-        textCell.appendChild(fillerBadge);
+        textDiv.appendChild(fillerBadge);
       }
+      textCell.appendChild(textDiv);
 
-      // Notes cell with textarea
-      const noteCell = document.createElement('td');
-      noteCell.className = 'note-cell';
+      // Notes + decision below the text
+      const belowRow = document.createElement('div');
+      belowRow.className = 'text-below-row';
+
       const noteTextarea = document.createElement('textarea');
       noteTextarea.className = 'note-input';
       noteTextarea.placeholder = translations[currentMode]['Notiz'] + '…';
       noteTextarea.rows = 1;
-      noteTextarea.style.cssText = 'width:100%;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;padding:3px 6px;resize:none;';
+      noteTextarea.style.cssText = 'flex:1;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;padding:3px 6px;resize:none;';
       noteTextarea.oninput = function() {
         tr.setAttribute('data-note', this.value);
         triggerAutoSave();
       };
-      noteCell.appendChild(noteTextarea);
 
-      const delCell = document.createElement('td');
-      delCell.className = 'del-cell';
-      
       // Create decision buttons container
       const btnContainer = document.createElement('div');
       btnContainer.className = 'decision-buttons';
-      
+
       // Keep button
       const keepBtn = document.createElement('button');
       keepBtn.className = 'btn-decision btn-keep';
@@ -1417,12 +1420,12 @@
 
       btnContainer.appendChild(keepBtn);
       btnContainer.appendChild(deleteBtn);
-      delCell.appendChild(btnContainer);
+      belowRow.appendChild(noteTextarea);
+      belowRow.appendChild(btnContainer);
+      textCell.appendChild(belowRow);
 
       tr.appendChild(tsCell);
       tr.appendChild(textCell);
-      tr.appendChild(noteCell);
-      tr.appendChild(delCell);
       tbody.appendChild(tr);
     }
 
@@ -1862,7 +1865,7 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     function handleMouseDown(e) {
       // Only start drag if clicking on a row (not on buttons or editable text)
       const row = e.target.closest('tr');
-      if (!row || e.target.closest('.btn-decision') || e.target.closest('.text-cell[contenteditable="true"]') || e.target.closest('.note-input')) {
+      if (!row || e.target.closest('.btn-decision') || e.target.closest('.text-editable[contenteditable="true"]') || e.target.closest('.note-input')) {
         return;
       }
       
