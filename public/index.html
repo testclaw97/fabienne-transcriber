@@ -908,7 +908,7 @@
         } catch (firstErr) {
           document.getElementById('file-list').innerHTML =
             '<li><span class="loading-msg">Server startet… bitte warten ☕</span></li>';
-          await new Promise(r => setTimeout(r, 35000));
+          await new Promise(r => setTimeout(r, 15000));
           data = await doBrowseRequest();
         }
         renderFileList(data.items);
@@ -1040,8 +1040,8 @@
           data = await doTranscribeRequest();
         } catch (firstErr) {
           // Likely cold start — wait and retry
-          setProgress('Starte…', 5, 'Server startet… bitte 35 Sekunden warten ☕');
-          await new Promise(r => setTimeout(r, 35000));
+          setProgress('Starte…', 5, 'Server startet… bitte warten ☕');
+          await new Promise(r => setTimeout(r, 15000));
           data = await doTranscribeRequest();
         }
         jobId = data.jobId;
@@ -1107,7 +1107,7 @@
             document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
             showError('Verbindung zum Server unterbrochen.');
           }
-        }, 90000);
+        }, 45000);
       };
     }
 
