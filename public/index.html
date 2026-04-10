@@ -1602,20 +1602,31 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       txtLines.push('─'.repeat(60));
       txtLines.push(`Gesamt: ${segments.length} Segmente — ${counts.keep || 0} Behalten / ${counts.delete || 0} Löschen / ${counts.unmarked || 0} nicht markiert`);
 
-      try {
-        const txtFileName = 'Notizen-' + videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '.txt';
+      const txtFileName = 'Notizen-' + videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '.txt';
+      const doSaveRequest = async () => {
         const r = await fetch(`/api/save-notes/${currentJobId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: txtLines.join('\n'), fileName: txtFileName, folderId: currentFolderId })
         });
-        const data = await r.json();
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) throw new Error('server_starting');
+        return await r.json();
+      };
+      try {
+        let data;
+        try {
+          data = await doSaveRequest();
+        } catch (firstErr) {
+          if (btn) btn.textContent = 'Server startet… ☕';
+          await new Promise(r => setTimeout(r, 15000));
+          data = await doSaveRequest();
+        }
         if (data.success) {
           const modal = document.getElementById('drive-success-modal');
           document.getElementById('drive-success-link').href = data.link || '#';
           modal.style.display = 'flex';
-        }
-        else showToast('Fehler: ' + (data.error || 'Unbekannt'));
+        } else showToast('Fehler: ' + (data.error || 'Unbekannt'));
       } catch (e) {
         showToast('Drive-Fehler: ' + e.message);
       } finally {
