@@ -1615,13 +1615,20 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       };
       try {
         let data;
-        try {
-          data = await doSaveRequest();
-        } catch (firstErr) {
-          if (btn) btn.textContent = 'Server startet… ☕';
-          await new Promise(r => setTimeout(r, 15000));
-          data = await doSaveRequest();
+        let lastErr;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            data = await doSaveRequest();
+            lastErr = null;
+            break;
+          } catch (err) {
+            lastErr = err;
+            if (err.message !== 'server_starting') throw err;
+            if (btn) btn.textContent = 'Server startet… ☕';
+            await new Promise(r => setTimeout(r, 10000));
+          }
         }
+        if (lastErr) throw new Error('Server nicht erreichbar. Bitte Seite neu laden.');
         if (data.success) {
           const modal = document.getElementById('drive-success-modal');
           document.getElementById('drive-success-link').href = data.link || '#';
