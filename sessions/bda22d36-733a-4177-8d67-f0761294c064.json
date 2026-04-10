@@ -1,0 +1,9 @@
+{
+  "decisions": {
+    "0": "keep",
+    "1": "cut",
+    "2": "delete"
+  },
+  "notes": {},
+  "updatedAt": "2026-04-10T00:18:54.700Z"
+}

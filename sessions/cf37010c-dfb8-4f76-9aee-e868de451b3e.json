@@ -1,0 +1,19 @@
+{
+  "decisions": {
+    "0": "keep",
+    "1": "keep",
+    "2": "keep",
+    "3": "keep",
+    "4": "cut",
+    "5": "cut",
+    "6": "cut",
+    "7": "delete",
+    "8": "delete",
+    "9": "keep",
+    "10": "keep",
+    "11": "cut",
+    "12": "keep"
+  },
+  "notes": {},
+  "updatedAt": "2026-04-10T00:22:15.498Z"
+}

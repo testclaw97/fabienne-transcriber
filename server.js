@@ -181,6 +181,7 @@ async function startTranscription(audioUrl) {
       audio_url: audioUrl,
       language: 'de',
       diarization: false,
+      words: true,
     },
     {
       headers: {
@@ -221,38 +222,56 @@ async function pollTranscription(transcriptionId, jobId) {
 // ── Format Gladia result into our transcript shape ───────────────────────────
 
 function formatTranscript(gladiaResult) {
-  const utterances = gladiaResult?.transcription?.utterances;
+  // Prefer word-level data (enabled via words:true in startTranscription)
+  const words = gladiaResult?.transcription?.words || [];
 
+  if (words.length > 0) {
+    // Split into short sentence-based segments using punctuation + max 10s cap
+    const segments = [];
+    let cur = [];
+    let segStart = null;
+
+    for (const w of words) {
+      if (segStart === null) segStart = w.start;
+      cur.push(w.word);
+
+      const endsWithPunct = /[.!?,;]$/.test(w.word.trim());
+      const duration = w.end - segStart;
+
+      if ((endsWithPunct && duration >= 2) || duration >= 10) {
+        segments.push({
+          start: segStart,
+          timestamp: formatTimestamp(segStart),
+          text: cur.join(' ').trim(),
+        });
+        cur = [];
+        segStart = null;
+      }
+    }
+
+    // Flush remaining words
+    if (cur.length > 0 && segStart !== null) {
+      segments.push({
+        start: segStart,
+        timestamp: formatTimestamp(segStart),
+        text: cur.join(' ').trim(),
+      });
+    }
+
+    return segments;
+  }
+
+  // Fallback: utterances (no word-level data)
+  const utterances = gladiaResult?.transcription?.utterances;
   if (utterances && utterances.length > 0) {
     return utterances.map(u => ({
-      start: Math.floor(u.start),
+      start: u.start,
       timestamp: formatTimestamp(u.start),
       text: (u.text || u.transcript || '').trim(),
     }));
   }
 
-  // Fallback: words grouped into ~10-second chunks
-  const words = gladiaResult?.transcription?.words || [];
-  if (words.length === 0) return [];
-
-  const chunks = [];
-  let chunk = null;
-  const CHUNK_SECONDS = 10;
-
-  for (const word of words) {
-    const bucketStart = Math.floor(word.start / CHUNK_SECONDS) * CHUNK_SECONDS;
-    if (!chunk || chunk.bucketStart !== bucketStart) {
-      chunk = { bucketStart, start: word.start, words: [] };
-      chunks.push(chunk);
-    }
-    chunk.words.push(word.word);
-  }
-
-  return chunks.map(c => ({
-    start: Math.floor(c.start),
-    timestamp: formatTimestamp(c.start),
-    text: c.words.join(' ').trim(),
-  }));
+  return [];
 }
 
 // ── DeepSeek AI Analysis ─────────────────────────────────────────────────────
@@ -275,7 +294,7 @@ async function analyseWithDeepSeek(transcript) {
 
     const systemPrompt = 'You are a video transcript analyser. You will receive numbered transcript segments. Return ONLY valid JSON, no markdown, no explanation.';
     
-    const userPrompt = `Analyse these transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). Here are the segments: ${JSON.stringify(segments)}`;
+    const userPrompt = `Analyse these German transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... }, "suggestions": { "0": "keep", "1": "delete", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). (6) suggestions: for EVERY segment index as a string key, assign "delete" if the segment is a repetition, restart, filler phrase (ähm, also nochmal, ich meine, warte mal, etc.), false start, off-topic remark, or private conversation — otherwise assign "keep". When in doubt, assign "keep". Here are the segments: ${JSON.stringify(segments)}`;
 
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
@@ -615,97 +634,6 @@ app.get('/api/session/:jobId', (req, res) => {
 });
 
 // ── AI Chat Interface ─────────────────────────────────────────────────────────────
-
-app.post('/api/chat/:jobId', async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const { message, history = [], decisions = {}, notes = {} } = req.body;
-
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    const job = jobs.get(jobId);
-    if (!job || job.status !== 'done' || !job.result || !job.result.transcript) {
-      return res.status(400).json({ error: 'Job not found or no transcript available' });
-    }
-
-    const { transcript, aiGrouping } = job.result;
-    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-
-    if (!DEEPSEEK_API_KEY) {
-      return res.status(500).json({ error: 'DeepSeek API key not configured' });
-    }
-
-    // Build transcript context
-    const transcriptSegments = transcript.map((s, i) => ({
-      i,
-      ts: s.timestamp,
-      text: s.text
-    }));
-
-    // Prepare system prompt
-    let systemPrompt = 'Du bist ein freundlicher KI-Videoeditor-Assistent für Fabienne. Du verstehst Deutsch und kannst Videobearbeitungsanweisungen ausführen. Das Transkript hat nummerierte Segmente (0-basiert). Du antwortest kurz auf Deutsch. Wenn du Aktionen ausführst, gibst du IMMER ein JSON actions-Array zurück. Antworte im Format: {"reply": "...", "actions": [...]}. Verfügbare Aktionen: {"type":"setDecision","index":0,"decision":"keep|cut|delete"}, {"type":"setDecisionRange","from":0,"to":5,"decision":"keep|cut|delete"}, {"type":"seekTo","seconds":30}, {"type":"addNote","index":0,"note":"text"}, {"type":"clearAll"}';
-    
-    systemPrompt += '\n\nTranskript-Segmente: ' + JSON.stringify(transcriptSegments);
-    systemPrompt += '\n\nAktuelle Entscheidungen: ' + JSON.stringify(decisions);
-    
-    if (Object.keys(notes).length > 0) {
-      systemPrompt += '\n\nAktuelle Notizen: ' + JSON.stringify(notes);
-    }
-
-    // Prepare messages array (history + new message)
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...history.slice(-10).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
-      { role: 'user', content: message }
-    ];
-
-    // Call DeepSeek API
-    const response = await axios.post(
-      'https://api.deepseek.com/v1/chat/completions',
-      {
-        model: 'deepseek-chat',
-        messages: messages,
-        max_tokens: 1024,
-        temperature: 0.4
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-
-    const content = response.data.choices[0].message.content;
-    
-    // Try to parse JSON response
-    let reply = content;
-    let actions = [];
-    
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.reply && Array.isArray(parsed.actions)) {
-        reply = parsed.reply;
-        actions = parsed.actions;
-      }
-    } catch (parseError) {
-      // If parsing fails, treat the whole content as reply with no actions
-      console.log('Failed to parse DeepSeek JSON response, using raw content:', parseError.message);
-    }
-
-    return res.json({ reply, actions });
-    
-  } catch (error) {
-    console.error('Chat endpoint error:', error.message);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ── Media serving ─────────────────────────────────────────────────────────────
 

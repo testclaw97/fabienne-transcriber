@@ -309,56 +309,64 @@
     }
     .btn-delete:hover { color: #ef4444; background: #fef2f2; }
     
+    /* Transcript table: sticky header */
+    .transcript-panel { overflow-x: auto; }
+    #transcript-table thead th {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 10;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+
+    /* Row number column */
+    .num-col { width: 32px; }
+    .num-cell {
+      width: 32px;
+      color: #bbb;
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      padding-right: 6px;
+      vertical-align: middle;
+      user-select: none;
+    }
+
     /* Decision buttons */
     .decision-buttons {
       display: flex;
-      gap: 4px;
+      gap: 6px;
       justify-content: center;
     }
     .btn-decision {
       background: #f0f0f0;
-      border: none;
-      border-radius: 4px;
-      padding: 4px 8px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 5px 10px;
       font-size: 0.85rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
+      transition: all 0.15s;
       line-height: 1;
+      white-space: nowrap;
     }
-    .btn-decision:hover {
-      transform: translateY(-1px);
-    }
-    .btn-keep {
-      color: #166534;
-    }
-    .btn-keep:hover, .btn-keep.active {
-      background: #dcfce7;
-      color: #166534;
-    }
-    .btn-cut {
-      color: #854d0e;
-    }
-    .btn-cut:hover, .btn-cut.active {
-      background: #fef9c3;
-      color: #854d0e;
-    }
-    .btn-delete-btn {
-      color: #7f1d1d;
-    }
-    .btn-delete-btn:hover, .btn-delete-btn.active {
-      background: #fee2e2;
-      color: #7f1d1d;
-    }
-    
+    .btn-decision:hover { transform: translateY(-1px); }
+    .btn-keep { color: #166534; }
+    .btn-keep:hover { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .btn-keep.active { background: #16a34a; border-color: #16a34a; color: #fff; }
+    .btn-delete-btn { color: #991b1b; }
+    .btn-delete-btn:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .btn-delete-btn.active { background: #dc2626; border-color: #dc2626; color: #fff; }
+
     /* Decision states for rows */
     tr[data-decision="keep"] {
       background-color: #f0fdf4 !important;
-    }
-    tr[data-decision="cut"] {
-      background-color: #fefce8 !important;
+      border-left: 3px solid #16a34a;
     }
     tr[data-decision="delete"] {
       background-color: #fef2f2 !important;
+      border-left: 3px solid #dc2626;
     }
     
     /* Selection for drag */
@@ -452,51 +460,11 @@
       transform: translateY(0);
     }
 
-    /* Chat Panel */
-    .chat-panel {
-      margin-top: 12px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .chat-history {
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    .chat-bubble {
-      padding: 8px 12px;
-      border-radius: 8px;
-      max-width: 85%;
-      font-size: 0.85rem;
-      line-height: 1.4;
-    }
-    .chat-bubble.user {
-      background: #5b5ef4;
-      color: white;
-      align-self: flex-end;
-    }
-    .chat-bubble.assistant {
-      background: #f0f0f0;
-      color: #333;
-      align-self: flex-start;
-    }
-    .chat-input-row {
-      display: flex;
-      gap: 8px;
-      padding: 8px;
-      border-top: 1px solid #e0e0e0;
-    }
-    #chat-input {
-      flex: 1;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 0.85rem;
-      resize: none;
+    /* AI suggestion indicator */
+    tr[data-suggested="delete"] td:first-child::before {
+      content: "🤖 ";
+      font-size: 0.7rem;
+      opacity: 0.5;
     }
 
     /* Responsive: stack on small screens */
@@ -580,26 +548,6 @@
         </div>
         <div class="media-title" id="media-title"></div>
         
-        <!-- AI Chat Panel -->
-        <div class="chat-panel" id="chat-panel" style="display: none;">
-          <div class="chat-history" id="chat-history"></div>
-          <div class="chat-input-row">
-            <textarea id="chat-input" placeholder="Frag die KI… z.B. &quot;Schneide alles wo ich gestottert habe&quot;" rows="2"></textarea>
-            <button class="btn-tool" id="chat-send-btn" onclick="sendChatMessage()">▶</button>
-            <button class="btn-tool" id="chat-mic-btn" onclick="toggleSpeechRecognition()">🎤</button>
-          </div>
-          <div style="font-size: 0.75rem; color: #888; text-align: center; padding: 4px 8px 8px;">
-            <span id="chat-hint-text">Tippe oder sprich auf Deutsch</span>
-          </div>
-        </div>
-        
-        <!-- Generate Cut Button -->
-        <div id="generate-cut-container" style="display: none; margin-top: 16px; text-align: center;">
-          <button id="generate-cut-btn" class="btn-save" style="width: 100%; padding: 10px 16px; font-size: 0.9rem;" onclick="generateCut()">
-            Schnitt erstellen ✂️
-          </button>
-          <div id="generate-cut-status" style="font-size: 0.75rem; color: #666; margin-top: 8px; min-height: 20px;"></div>
-        </div>
       </div>
 
       <!-- Right: transcript editor -->
@@ -622,10 +570,11 @@
         <table class="font-md" id="transcript-table">
           <thead>
             <tr>
+              <th class="num-col">#</th>
               <th class="ts-col">Zeit</th>
               <th>Text</th>
               <th>Notiz</th>
-              <th></th>
+              <th>Entscheidung</th>
             </tr>
           </thead>
           <tbody id="transcript-body"></tbody>
@@ -639,9 +588,8 @@
   
   <!-- Floating toolbar for drag selection -->
   <div class="floating-toolbar" id="floating-toolbar">
-    <button class="btn-decision btn-keep" onclick="applyDecisionToSelected('keep')">✅ Keep</button>
-    <button class="btn-decision btn-cut" onclick="applyDecisionToSelected('cut')">✂️ Cut</button>
-    <button class="btn-decision btn-delete-btn" onclick="applyDecisionToSelected('delete')">🗑️ Delete</button>
+    <button class="btn-decision btn-keep" onclick="applyDecisionToSelected('keep')">✅ Behalten</button>
+    <button class="btn-decision btn-delete-btn" onclick="applyDecisionToSelected('delete')">🗑️ Löschen</button>
   </div>
 
   <script>
@@ -1136,9 +1084,6 @@
             
             // Initialize transcript sync
             initTranscriptSync();
-            
-            // Show chat panel
-            showChatPanel();
           } else {
             mediaPanel.classList.add('hidden');
             // Stop any existing sync
@@ -1202,11 +1147,11 @@
         setTimeout(() => saveSession(), 1000);
       }
 
-      // Render AI grouping if available
+      // Render AI grouping + apply suggestions if available
       renderAiGrouping(lastAiGrouping, data);
-      
-      // Update generate cut button visibility
-      updateGenerateCutButton();
+      if (lastAiGrouping && lastAiGrouping.suggestions) {
+        applyAiSuggestions(lastAiGrouping.suggestions);
+      }
     }
 
     function renderAiGrouping(aiGrouping, transcript) {
@@ -1298,6 +1243,12 @@
       const tr = document.createElement('tr');
       tr.dataset.index = i;
 
+      // Row number cell
+      const numCell = document.createElement('td');
+      numCell.className = 'num-cell';
+      numCell.textContent = i + 1;
+      tr.appendChild(numCell);
+
       const tsCell = document.createElement('td');
       tsCell.className = 'ts-cell';
       tsCell.textContent = row.timestamp;
@@ -1340,35 +1291,22 @@
       // Keep button
       const keepBtn = document.createElement('button');
       keepBtn.className = 'btn-decision btn-keep';
-      keepBtn.textContent = '✅ Keep';
-      keepBtn.title = translations[currentMode]['Behalten'];
+      keepBtn.textContent = '✅ Behalten';
       keepBtn.onclick = (e) => {
         e.stopPropagation();
         setDecision(tr, 'keep');
       };
-      
-      // Cut button
-      const cutBtn = document.createElement('button');
-      cutBtn.className = 'btn-decision btn-cut';
-      cutBtn.textContent = '✂️ Cut';
-      cutBtn.title = translations[currentMode]['Ausschneiden'];
-      cutBtn.onclick = (e) => {
-        e.stopPropagation();
-        setDecision(tr, 'cut');
-      };
-      
+
       // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'btn-decision btn-delete-btn';
-      deleteBtn.textContent = '🗑️ Delete';
-      deleteBtn.title = translations[currentMode]['Löschen'];
+      deleteBtn.textContent = '🗑️ Löschen';
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
         setDecision(tr, 'delete');
       };
-      
+
       btnContainer.appendChild(keepBtn);
-      btnContainer.appendChild(cutBtn);
       btnContainer.appendChild(deleteBtn);
       delCell.appendChild(btnContainer);
 
@@ -1479,8 +1417,8 @@
       });
       const removedStr = removedSec >= 60 ? Math.floor(removedSec / 60) + 'm ' + (removedSec % 60) + 's' : removedSec + 's';
 
-      const dEmoji = { keep: '✅ KEEP', cut: '✂️ CUT', delete: '🗑️ DELETE', unmarked: '— unmarked' };
-      const dColor = { keep: '#16a34a', cut: '#d97706', delete: '#dc2626', unmarked: '#9ca3af' };
+      const dEmoji = { keep: '✅ BEHALTEN', delete: '🗑️ LÖSCHEN', unmarked: '— nicht markiert' };
+      const dColor = { keep: '#16a34a', delete: '#dc2626', unmarked: '#9ca3af' };
 
       const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -1508,10 +1446,9 @@ h1{font-size:1.5rem;margin:0 0 4px;}
 <div class="summary">
 <strong>Summary:</strong> ${segments.length} segments`;
 
-      if (counts.keep) html += ` &nbsp;✅ <span style="color:#16a34a">${counts.keep} KEEP</span>`;
-      if (counts.cut) html += ` &nbsp;✂️ <span style="color:#d97706">${counts.cut} CUT</span>`;
-      if (counts.delete) html += ` &nbsp;🗑️ <span style="color:#dc2626">${counts.delete} DELETE</span>`;
-      if (counts.unmarked) html += ` &nbsp;<span style="color:#9ca3af">${counts.unmarked} unmarked</span>`;
+      if (counts.keep) html += ` &nbsp;✅ <span style="color:#16a34a">${counts.keep} BEHALTEN</span>`;
+      if (counts.delete) html += ` &nbsp;🗑️ <span style="color:#dc2626">${counts.delete} LÖSCHEN</span>`;
+      if (counts.unmarked) html += ` &nbsp;<span style="color:#9ca3af">${counts.unmarked} nicht markiert</span>`;
       if (counts.cut + counts.delete > 0) html += `<br>Total to remove: ~${removedStr}`;
       html += `</div>`;
 
@@ -1672,18 +1609,6 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     }
 
     function applyDecisionToSelected(decision) {
-      if ((decision === 'cut' || decision === 'delete') && lastAiGrouping && lastAiGrouping.safety) {
-        const tbody = document.querySelector('#transcript-body');
-        const dataRows = Array.from(tbody.querySelectorAll('tr:not(.ai-paragraph-header)'));
-        const hasRed = selectedRows.some(row => {
-          const idx = dataRows.indexOf(row);
-          return idx !== -1 && lastAiGrouping.safety[String(idx)] === 'red';
-        });
-        if (hasRed) {
-          showSafetyModal(() => { selectedRows.forEach(row => setDecision(row, decision)); clearSelection(); });
-          return;
-        }
-      }
       selectedRows.forEach(row => setDecision(row, decision));
       clearSelection();
     }
@@ -1697,27 +1622,18 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       const buttons = row.querySelectorAll('.btn-decision');
       buttons.forEach(btn => btn.classList.remove('active'));
       
-      // Set new decision
-      if (decision) {
-        row.setAttribute('data-decision', decision);
-        // Activate the corresponding button
-        const btnMap = {
-          'keep': 'btn-keep',
-          'cut': 'btn-cut',
-          'delete': 'btn-delete-btn'
-        };
-        const activeBtn = row.querySelector(`.${btnMap[decision]}`);
-        if (activeBtn) {
-          activeBtn.classList.add('active');
-        }
+      // Set new decision (treat legacy 'cut' as 'delete')
+      const normalised = decision === 'cut' ? 'delete' : decision;
+      if (normalised) {
+        row.setAttribute('data-decision', normalised);
+        const btnMap = { 'keep': 'btn-keep', 'delete': 'btn-delete-btn' };
+        const activeBtn = row.querySelector(`.${btnMap[normalised]}`);
+        if (activeBtn) activeBtn.classList.add('active');
       }
-      
+
       // Clear drag selection when clicking individual buttons
       clearSelection();
-      
-      // Update generate cut button visibility
-      updateGenerateCutButton();
-      
+
       // Trigger auto-save
       triggerAutoSave();
     }
@@ -1938,351 +1854,21 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       }
     }
 
-    // ── AI Chat Functions ─────────────────────────────────────────────────────
-    
-    let chatHistory = [];
-    let isListening = false;
-    let speechRecognition = null;
-    
-    function showChatPanel() {
-      const chatPanel = document.getElementById('chat-panel');
-      if (chatPanel) {
-        chatPanel.style.display = 'block';
-        // Scroll to bottom of chat history
-        const chatHistoryEl = document.getElementById('chat-history');
-        if (chatHistoryEl) {
-          chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
-        }
-      }
-    }
-    
-    function addChatMessage(role, content) {
-      const chatHistoryEl = document.getElementById('chat-history');
-      if (!chatHistoryEl) return;
-      
-      const bubble = document.createElement('div');
-      bubble.className = `chat-bubble ${role}`;
-      bubble.textContent = content;
-      chatHistoryEl.appendChild(bubble);
-      
-      // Scroll to bottom
-      chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
-      
-      // Add to history (max 10 messages)
-      chatHistory.push({ role, content });
-      if (chatHistory.length > 10) {
-        chatHistory = chatHistory.slice(-10);
-      }
-    }
-    
-    async function sendChatMessage() {
-      const input = document.getElementById('chat-input');
-      if (!input) return;
-      
-      const message = input.value.trim();
-      if (!message) return;
-      
-      // Add user message to chat
-      addChatMessage('user', message);
-      input.value = '';
-      
-      // Collect current decisions
-      const decisions = {};
-      const rows = document.querySelectorAll('#transcript-body tr');
-      rows.forEach((row, index) => {
-        const decision = row.getAttribute('data-decision');
-        if (decision) {
-          decisions[index] = decision;
-        }
-      });
-      
-      // Collect current notes
-      const notes = {};
-      rows.forEach((row, index) => {
-        const noteInput = row.querySelector('input[type="text"]');
-        if (noteInput && noteInput.value.trim()) {
-          notes[index] = noteInput.value.trim();
-        }
-      });
-      
-      try {
-        const response = await fetch(`/api/chat/${currentJobId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            history: chatHistory,
-            decisions,
-            notes
-          })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Chat request failed');
-        }
-        
-        const data = await response.json();
-        addChatMessage('assistant', data.reply);
-        
-        // Execute actions
-        if (data.actions && Array.isArray(data.actions)) {
-          data.actions.forEach(executeAction);
-        }
-        
-      } catch (error) {
-        console.error('Chat error:', error);
-        addChatMessage('assistant', 'Entschuldigung, ein Fehler ist aufgetreten. Bitte versuche es erneut.');
-      }
-    }
-    
-    function executeAction(action) {
-      switch (action.type) {
-        case 'setDecision':
-          const row = document.querySelector(`#transcript-body tr:nth-child(${action.index + 1})`);
-          if (row) {
-            setDecision(row, action.decision);
-          }
-          break;
-          
-        case 'setDecisionRange':
-          for (let i = action.from; i <= action.to; i++) {
-            const rangeRow = document.querySelector(`#transcript-body tr:nth-child(${i + 1})`);
-            if (rangeRow) {
-              setDecision(rangeRow, action.decision);
-            }
-          }
-          break;
-          
-        case 'seekTo':
-          const videoPlayer = document.getElementById('video-player');
-          const audioPlayer = document.getElementById('audio-player');
-          if (videoPlayer && audioPlayer) {
-            videoPlayer.currentTime = action.seconds;
-            audioPlayer.currentTime = action.seconds;
-            videoPlayer.play().catch(e => console.log('Video play failed:', e));
-            audioPlayer.play().catch(e => console.log('Audio play failed:', e));
-          }
-          break;
-          
-        case 'addNote':
-          const noteRow = document.querySelector(`#transcript-body tr:nth-child(${action.index + 1})`);
-          if (noteRow) {
-            const noteInput = noteRow.querySelector('input[type="text"]');
-            if (noteInput) {
-              noteInput.value = action.note;
-              noteInput.setAttribute('data-note', action.note);
-            }
-          }
-          break;
-          
-        case 'clearAll':
-          const allRows = document.querySelectorAll('#transcript-body tr');
-          allRows.forEach(row => setDecision(row, null));
-          break;
-      }
-    }
-    
-    function toggleSpeechRecognition() {
-      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-        addChatMessage('assistant', 'Mikrofon nicht verfügbar');
-        return;
-      }
-      
-      if (isListening) {
-        stopSpeechRecognition();
-      } else {
-        startSpeechRecognition();
-      }
-    }
-    
-    function startSpeechRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      speechRecognition = new SpeechRecognition();
-      speechRecognition.lang = 'de-DE';
-      speechRecognition.continuous = false;
-      speechRecognition.interimResults = false;
-      
-      speechRecognition.onstart = () => {
-        isListening = true;
-        const micBtn = document.getElementById('chat-mic-btn');
-        if (micBtn) {
-          micBtn.style.background = '#5b5ef4';
-          micBtn.style.color = 'white';
-        }
-      };
-      
-      speechRecognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        const input = document.getElementById('chat-input');
-        if (input) {
-          input.value = transcript;
-          sendChatMessage();
-        }
-      };
-      
-      speechRecognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        addChatMessage('assistant', 'Spracherkennung fehlgeschlagen');
-      };
-      
-      speechRecognition.onend = () => {
-        stopSpeechRecognition();
-      };
-      
-      speechRecognition.start();
-    }
-    
-    function stopSpeechRecognition() {
-      if (speechRecognition) {
-        speechRecognition.stop();
-      }
-      isListening = false;
-      const micBtn = document.getElementById('chat-mic-btn');
-      if (micBtn) {
-        micBtn.style.background = '';
-        micBtn.style.color = '';
-      }
-    }
-    
-    // Wire up chat input events
-    document.addEventListener('DOMContentLoaded', function() {
-      const chatInput = document.getElementById('chat-input');
-      const chatSendBtn = document.getElementById('chat-send-btn');
-      
-      if (chatInput) {
-        chatInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && e.ctrlKey) {
-            e.preventDefault();
-            sendChatMessage();
-          }
-        });
-      }
-      
-      if (chatSendBtn) {
-        chatSendBtn.addEventListener('click', sendChatMessage);
-      }
-    });
+    // ── AI Suggestions ────────────────────────────────────────────────────────
 
-    // ── Generate Cut Function ─────────────────────────────────────────────────
-    
-    async function generateCut() {
-      if (!currentJobId) {
-        addChatMessage('assistant', 'Kein aktiver Job gefunden.');
-        return;
-      }
-      
-      // Collect decisions from all transcript rows
-      const decisions = {};
-      const rows = document.querySelectorAll('#transcript-body tr');
-      let hasCutOrDelete = false;
-      
-      rows.forEach((row, index) => {
-        const decision = row.getAttribute('data-decision');
-        if (decision) {
-          decisions[index] = decision;
-          if (decision === 'cut' || decision === 'delete') {
-            hasCutOrDelete = true;
-          }
-        }
-      });
-      
-      // Check if at least one segment is marked cut or delete
-      if (!hasCutOrDelete) {
-        addChatMessage('assistant', 'Keine Segmente zum Schneiden markiert. Bitte markiere zu entfernende Segmente als "cut" oder "delete".');
-        return;
-      }
-      
-      // Show loading state
-      const generateCutBtn = document.getElementById('generate-cut-btn');
-      const originalText = generateCutBtn.textContent;
-      generateCutBtn.textContent = 'Wird erstellt…';
-      generateCutBtn.disabled = true;
-      
-      const statusEl = document.getElementById('generate-cut-status');
-      statusEl.textContent = 'Erstelle Schnitt…';
-      statusEl.style.color = '#666';
-      
-      try {
-        // POST to /api/render/{currentJobId}
-        const response = await fetch(`/api/render/${currentJobId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ decisions }),
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Unbekannter Fehler');
-        }
-        
-        // Success: update video player
-        const videoPlayer = document.getElementById('video-player');
-        if (videoPlayer) {
-          videoPlayer.src = data.url + '?t=' + Date.now(); // cache bust
-          videoPlayer.load();
-        }
-        
-        // Show success message in chat
-        addChatMessage('assistant', 'Schnitt fertig! Du kannst die 144p-Vorschau jetzt im Player sehen.');
-        
-        // Update status
-        statusEl.textContent = 'Schnitt erfolgreich erstellt!';
-        statusEl.style.color = '#22c55e';
-        
-      } catch (error) {
-        console.error('Generate cut error:', error);
-        
-        // Show error in chat
-        addChatMessage('assistant', `Fehler beim Erstellen des Schnitts: ${error.message}`);
-        
-        // Update status
-        statusEl.textContent = `Fehler: ${error.message}`;
-        statusEl.style.color = '#ef4444';
-        
-      } finally {
-        // Restore button
-        generateCutBtn.textContent = originalText;
-        generateCutBtn.disabled = false;
-        
-        // Clear status after 5 seconds
-        setTimeout(() => {
-          statusEl.textContent = '';
-        }, 5000);
-      }
-    }
-    
-    // Function to update generate cut button visibility
-    function updateGenerateCutButton() {
-      const container = document.getElementById('generate-cut-container');
-      if (!container) return;
-      
-      // Check if hasMedia is true and at least one segment is marked cut or delete
-      const mediaPanel = document.getElementById('media-panel');
-      const hasMedia = mediaPanel && !mediaPanel.classList.contains('hidden');
-      
-      if (!hasMedia) {
-        container.style.display = 'none';
-        return;
-      }
-      
-      // Check for cut/delete decisions
-      const rows = document.querySelectorAll('#transcript-body tr');
-      let hasCutOrDelete = false;
-      
+    function applyAiSuggestions(suggestions) {
+      // Apply DeepSeek-suggested keep/delete decisions to rows that aren't already marked
+      const rows = document.querySelectorAll('#transcript-body tr[data-index]');
       rows.forEach(row => {
-        const decision = row.getAttribute('data-decision');
-        if (decision === 'cut' || decision === 'delete') {
-          hasCutOrDelete = true;
+        const idx = row.dataset.index;
+        const suggestion = suggestions[String(idx)];
+        if (suggestion && !row.getAttribute('data-decision')) {
+          setDecision(row, suggestion);
+          row.setAttribute('data-suggested', suggestion); // track it was auto-marked
         }
       });
-      
-      if (hasCutOrDelete) {
-        container.style.display = 'block';
-      } else {
-        container.style.display = 'none';
-      }
     }
+
 
     // ── Init ──────────────────────────────────────────────────────────────────
     browse(null, 'Alle Ordner');
