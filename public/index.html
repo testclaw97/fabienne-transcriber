@@ -1007,18 +1007,31 @@
       const driveUrl = `https://drive.google.com/file/d/${fileId}/view`;
 
       let jobId;
-      try {
+      const doTranscribeRequest = async () => {
         const res = await fetch('/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: driveUrl, folderId: currentFolderId }),
         });
         const data = await res.json();
-        if (!res.ok) { showError(data.error || 'Unbekannter Fehler'); return; }
+        if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
+        return data;
+      };
+
+      try {
+        let data;
+        try {
+          data = await doTranscribeRequest();
+        } catch (firstErr) {
+          // Likely cold start — wait and retry once
+          setProgress('Starte…', 5, 'Server startet… bitte 20 Sekunden warten ☕');
+          await new Promise(r => setTimeout(r, 20000));
+          data = await doTranscribeRequest();
+        }
         jobId = data.jobId;
         activeJobId = jobId;
       } catch (err) {
-        showError('Server nicht erreichbar.');
+        showError('Server nicht erreichbar: ' + err.message);
         return;
       }
 
