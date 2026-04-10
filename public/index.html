@@ -1038,6 +1038,7 @@
       const evtSource = new EventSource(`/progress/${jobId}`);
 
       evtSource.onmessage = (e) => {
+        if (errorTimeout) { clearTimeout(errorTimeout); errorTimeout = null; }
         const msg = JSON.parse(e.data);
         if (msg.type === 'progress') setProgress(msg.step, msg.pct, msg.message);
         if (msg.type === 'done') {
@@ -1078,11 +1079,18 @@
         }
       };
 
+      let errorTimeout = null;
       evtSource.onerror = () => {
-        evtSource.close();
-        activeJobId = null;
-        document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
-        showError('Verbindung zum Server unterbrochen.');
+        // EventSource auto-reconnects — only show error if it stays broken for 30s
+        if (errorTimeout) return;
+        errorTimeout = setTimeout(() => {
+          if (evtSource.readyState !== EventSource.OPEN) {
+            evtSource.close();
+            activeJobId = null;
+            document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
+            showError('Verbindung zum Server unterbrochen.');
+          }
+        }, 30000);
       };
     }
 
