@@ -1166,6 +1166,8 @@
               document.getElementById('sticky-audio-title').textContent = activeFileName;
               stickyPlayer.src = audioPlayer.src;
               bar.classList.add('visible');
+              // Mute main player on mobile — sticky bar is the only audio output
+              audioPlayer.muted = true;
               // Sync the two audio players (abort previous listeners to avoid stacking)
               if (audioPlayer._syncAbort) audioPlayer._syncAbort.abort();
               audioPlayer._syncAbort = new AbortController();
