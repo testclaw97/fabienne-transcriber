@@ -269,12 +269,19 @@
     }
     .ts-cell:hover { color: #4547d4; text-decoration: underline; }
     .text-cell { font-size: 0.9rem; line-height: 1.5; }
-    .text-en {
-      font-size: 0.78rem;
-      color: #888;
-      font-style: italic;
-      margin-top: 3px;
-      line-height: 1.4;
+    .filler-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 6px;
+      background: #fef9c3;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 99px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      vertical-align: middle;
+      cursor: default;
+      user-select: none;
     }
     .text-cell[contenteditable="true"] {
       outline: none;
@@ -383,8 +390,17 @@
     
     /* Playing row highlight */
     tr.playing {
-      background: #e8f4fd !important;
-      border-left: 3px solid #3b82f6;
+      background: #dbeafe !important;
+      border-left: 4px solid #2563eb !important;
+      box-shadow: inset 0 0 0 1px rgba(37,99,235,0.15);
+    }
+    tr.playing .ts-cell {
+      color: #1d4ed8 !important;
+      font-weight: 800;
+    }
+    tr.playing .ts-cell::before {
+      content: "▶ ";
+      font-size: 0.65rem;
     }
     
     /* Floating toolbar for drag selection */
@@ -439,34 +455,6 @@
     }
     .copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    /* Mode Toggle */
-    .mode-toggle {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 1000;
-      background: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 99px;
-      padding: 6px 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #5b5ef4;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: all 0.2s ease;
-      white-space: nowrap;
-    }
-    .mode-toggle:hover {
-      background: #f5f5ff;
-      border-color: #5b5ef4;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .mode-toggle:active {
-      transform: translateY(0);
-    }
-
     /* AI suggestion indicator */
     tr[data-suggested="delete"] td:first-child::before {
       content: "🤖 ";
@@ -495,7 +483,6 @@
 </head>
 <body>
 
-  <button class="mode-toggle" id="mode-toggle">Client Mode</button>
 
   <h1>Video Transkription</h1>
   <p class="subtitle">Google Drive Video-Link einfügen → Transkript erhalten</p>
@@ -543,11 +530,6 @@
 
       <!-- Left: media panel with video and audio players -->
       <div class="media-panel hidden" id="media-panel">
-        <div class="video-player-container">
-          <video class="video-player" id="video-player" controls preload="metadata">
-            Your browser does not support the video tag.
-          </video>
-        </div>
         <div class="audio-player-container">
           <audio class="audio-player" id="audio-player" controls preload="metadata">
             Your browser does not support the audio element.
@@ -562,6 +544,8 @@
         <div class="result-header">
           <h2>Transkript</h2>
           <div class="toolbar">
+            <span style="font-size:0.75rem;color:#888;display:flex;align-items:center;gap:6px;" title="Sicherheits-Ampel: Grün = sicher zu kürzen, Gelb = Vorsicht, Rot = nicht kürzen">🟢 sicher &nbsp;🟡 Vorsicht &nbsp;🔴 nicht kürzen</span>
+            <div class="toolbar-sep"></div>
             <button class="btn-tool active" id="ts-toggle-btn" onclick="toggleTimestamps()">Zeitstempel</button>
             <div class="toolbar-sep"></div>
             <button class="btn-tool" onclick="setFont('sm')">A−</button>
@@ -570,8 +554,8 @@
             <button class="btn-tool" onclick="setFont('xl')">A++</button>
             <div class="toolbar-sep"></div>
             <button class="btn-tool" onclick="copyAll()">Kopieren</button>
-            <button class="btn-save" onclick="downloadTxt()">Notizen speichern</button>
-            <button class="btn-save" onclick="generateEditBrief()" style="background:#16a34a;" title="Export edit instructions for video editor">Edit Brief</button>
+            <button class="btn-tool" onclick="downloadTxt()">Notizen herunterladen</button>
+            <button class="btn-save" onclick="saveToDrive()">Notizen in Drive speichern</button>
           </div>
         </div>
         <table class="font-md" id="transcript-table">
@@ -618,6 +602,7 @@
         'Transkript': 'Transkript',
         'Zeitstempel': 'Zeitstempel',
         'Kopieren': 'Kopieren',
+        'Notizen herunterladen': 'Notizen herunterladen',
         'Notizen speichern': 'Notizen speichern',
         'Zeit': 'Zeit',
         'Text': 'Text',
@@ -663,7 +648,8 @@
         'Transkript': 'Transcript',
         'Zeitstempel': 'Timestamps',
         'Kopieren': 'Copy',
-        'Notizen speichern': 'Save notes',
+        'Notizen herunterladen': 'Download notes',
+        'Notizen speichern': 'Save to Drive',
         'Zeit': 'Time',
         'Text': 'Text',
         'Notiz': 'Note',
@@ -729,6 +715,7 @@
     let activeJobId = null;
     let activeFileId = null;
     let activeFileName = '';
+    let currentFolderId = null;
     let showTimestamps = true;
     let currentFont = 'md';
     
@@ -753,27 +740,6 @@
 
     // ── Breadcrumb state ──────────────────────────────────────────────────────
     let navStack = [];
-
-    // ── Mode Toggle Functions ────────────────────────────────────────────────
-    function toggleMode() {
-      currentMode = currentMode === 'client' ? 'editor' : 'client';
-      localStorage.setItem('fabienne_mode', currentMode);
-      updateModeToggle();
-      applyLanguage();
-      
-      // Re-render AI grouping with new language labels
-      if (lastAiGrouping && lastTranscript) {
-        renderAiGrouping(lastAiGrouping, lastTranscript);
-      }
-    }
-
-    function updateModeToggle() {
-      const toggleBtn = document.getElementById('mode-toggle');
-      if (toggleBtn) {
-        toggleBtn.textContent = currentMode === 'client' ? 'Editor Mode' : 'Client Mode';
-        toggleBtn.title = currentMode === 'client' ? 'Switch to Editor Mode (English)' : 'Switch to Client Mode (German)';
-      }
-    }
 
     function translateText(text) {
       // First check if it's a server message with template variables
@@ -805,10 +771,10 @@
         { selector: '#ts-toggle-btn', prop: 'textContent' },
         { selector: 'button[onclick="copyAll()"]', prop: 'textContent' },
         { selector: 'button[onclick="downloadTxt()"]', prop: 'textContent' },
+        { selector: 'button[onclick="saveToDrive()"]', prop: 'textContent' },
         { selector: '.ts-col', prop: 'textContent' },
         { selector: 'th:nth-child(2)', prop: 'textContent' },
         { selector: 'th:nth-child(3)', prop: 'textContent' },
-        { selector: '#mode-toggle', prop: 'textContent' },
         { selector: '#chat-hint-text', prop: 'textContent' }
       ];
 
@@ -896,15 +862,8 @@
 
     // Initialize mode on page load
     document.addEventListener('DOMContentLoaded', function() {
-      updateModeToggle();
       applyLanguage();
-      
-      // Add click handler to mode toggle
-      const toggleBtn = document.getElementById('mode-toggle');
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', toggleMode);
-      }
-      
+
       // Check for jobId in URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const jobIdFromUrl = urlParams.get('jobId');
@@ -917,6 +876,7 @@
 
     // ── Browse ────────────────────────────────────────────────────────────────
     async function browse(folderId, folderName) {
+      currentFolderId = folderId;
       if (folderId === null) {
         navStack = [{ id: null, name: translations[currentMode]['Alle Ordner'] }];
       } else {
@@ -1051,7 +1011,7 @@
         const res = await fetch('/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: driveUrl }),
+          body: JSON.stringify({ url: driveUrl, folderId: currentFolderId }),
         });
         const data = await res.json();
         if (!res.ok) { showError(data.error || 'Unbekannter Fehler'); return; }
@@ -1082,13 +1042,11 @@
           const mediaPanel = document.getElementById('media-panel');
           if (msg.hasMedia) {
             mediaPanel.classList.remove('hidden');
-            // Set media sources
-            const videoPlayer = document.getElementById('video-player');
+            // Set audio source
             const audioPlayer = document.getElementById('audio-player');
-            videoPlayer.src = `/media/${jobId}/preview`;
             audioPlayer.src = `/media/${jobId}/audio`;
             document.getElementById('media-title').textContent = activeFileName;
-            
+
             // Initialize transcript sync
             initTranscriptSync();
           } else {
@@ -1158,9 +1116,6 @@
       renderAiGrouping(lastAiGrouping, data);
       if (lastAiGrouping && lastAiGrouping.suggestions) {
         applyAiSuggestions(lastAiGrouping.suggestions);
-      }
-      if (lastAiGrouping && lastAiGrouping.translations) {
-        applyTranslations(lastAiGrouping.translations);
       }
     }
 
@@ -1276,11 +1231,16 @@
         transcriptData[i].text = textCell.textContent;
         triggerAutoSave();
       };
-      // English translation line (filled later by applyTranslations)
-      const enDiv = document.createElement('div');
-      enDiv.className = 'text-en';
-      enDiv.dataset.translationFor = i;
-      textCell.appendChild(enDiv);
+
+      // Filler word badge — detect ähm/äh/hm/uhm/um in text
+      const fillerPattern = /\b(ähm|äh|uhm|um|hm|hmm|ah|ach so|also nochmal|warte mal|ich meine|nochmal|na ja|naja)\b/i;
+      if (fillerPattern.test(row.text)) {
+        const fillerBadge = document.createElement('span');
+        fillerBadge.className = 'filler-badge';
+        fillerBadge.title = 'Enthält Füllwörter (ähm, äh, hm…)';
+        fillerBadge.textContent = '💬 Füllwörter';
+        textCell.appendChild(fillerBadge);
+      }
 
       // Notes cell with textarea
       const noteCell = document.createElement('td');
@@ -1373,51 +1333,252 @@
     }
 
     async function copyAll() {
-      await navigator.clipboard.writeText(buildFullText());
+      const text = buildFullText();
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (e) {
+        // Fallback for HTTP (non-HTTPS) contexts
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       const toast = document.getElementById('copy-toast');
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
-    function downloadTxt() {
+    async function downloadTxt() {
+      if (!transcriptData || transcriptData.length === 0) return;
+
+      const btn = document.querySelector('button.btn-save[onclick="downloadTxt()"]');
+      const origText = btn ? btn.textContent : '';
+      if (btn) { btn.textContent = '⏳ Übersetze…'; btn.disabled = true; }
+
       const videoName = activeFileName || 'Video';
-      const now = new Date().toLocaleString('de-DE');
-      const lines = [`TRANSKRIPT — ${videoName}`, `Erstellt: ${now}`, ''];
+      const now = new Date().toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
-      const dLabel = { keep: '✅ BEHALTEN', delete: '🗑️ LÖSCHEN', unmarked: '   —' };
-
-      transcriptData.forEach((seg, i) => {
+      // Collect segments with decisions + notes from DOM
+      const segments = transcriptData.map((seg, i) => {
         const row = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
         const decision = row ? (row.getAttribute('data-decision') || 'unmarked') : 'unmarked';
         const note = row ? (row.getAttribute('data-note') || '') : '';
-        const enEl = document.querySelector(`.text-en[data-translation-for="${i}"]`);
-        const enText = enEl ? enEl.textContent.trim() : '';
-
-        lines.push(`[${seg.timestamp}] ${dLabel[decision] || '   —'}`);
-        lines.push(`DE: ${seg.text}`);
-        if (enText) lines.push(`EN: ${enText}`);
-        if (note) lines.push(`Notiz: ${note}`);
-        lines.push('');
+        const endSec = i + 1 < transcriptData.length ? transcriptData[i + 1].start : seg.start + 30;
+        return { index: i, start: seg.start, end: endSec, timestamp: seg.timestamp, endTimestamp: formatTimeLocal(endSec), text: seg.text, decision, note };
       });
 
-      // Summary
-      const kept = transcriptData.filter((_, i) => {
-        const r = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
-        return r && r.getAttribute('data-decision') === 'keep';
-      }).length;
-      const deleted = transcriptData.filter((_, i) => {
-        const r = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
-        return r && r.getAttribute('data-decision') === 'delete';
-      }).length;
-      lines.push(`---`);
-      lines.push(`Gesamt: ${transcriptData.length} Segmente — ${kept} Behalten / ${deleted} Löschen / ${transcriptData.length - kept - deleted} nicht markiert`);
+      // Fetch English translations
+      let translations = {};
+      try {
+        const resp = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segments: segments.map(s => ({ index: s.index, text: s.text })) })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          translations = data.translations || {};
+        }
+      } catch (e) {
+        console.warn('Translation failed, continuing without EN text:', e.message);
+      }
 
-      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      if (btn) { btn.textContent = origText; btn.disabled = false; }
+
+      // Group by AI paragraphs if available
+      let groups = [];
+      if (lastAiGrouping && lastAiGrouping.paragraphs && lastAiGrouping.paragraphs.length > 0) {
+        lastAiGrouping.paragraphs.forEach(para => {
+          const segs = (para.segmentIndices || []).map(i => segments[i]).filter(Boolean);
+          if (segs.length > 0) {
+            groups.push({ label: para.labelEn || para.labelDe || 'Section', startTime: segs[0].timestamp, endTime: segs[segs.length - 1].endTimestamp, segments: segs });
+          }
+        });
+      }
+      if (groups.length === 0) {
+        groups = [{ label: 'Full Video', startTime: segments[0].timestamp, endTime: segments[segments.length - 1].endTimestamp, segments }];
+      }
+
+      // Stats
+      const counts = { keep: 0, delete: 0, unmarked: 0 };
+      let removedSec = 0;
+      segments.forEach(s => {
+        counts[s.decision] = (counts[s.decision] || 0) + 1;
+        if (s.decision === 'delete') removedSec += s.end - s.start;
+      });
+      const removedStr = removedSec >= 60 ? Math.floor(removedSec / 60) + 'm ' + (removedSec % 60) + 's' : removedSec + 's';
+
+      const dEmoji = { keep: '✅ BEHALTEN', delete: '🗑️ LÖSCHEN', unmarked: '— nicht markiert' };
+      const dColor = { keep: '#16a34a', delete: '#dc2626', unmarked: '#9ca3af' };
+      const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      let html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Notizen — ${esc(videoName)}</title>
+<style>
+body{font-family:'Segoe UI',sans-serif;max-width:860px;margin:0 auto;padding:32px 24px;background:#f9fafb;color:#111;}
+h1{font-size:1.5rem;margin:0 0 4px;}
+.meta{color:#6b7280;font-size:.9rem;margin-bottom:24px;}
+.summary{background:#f3f4f6;border-radius:8px;padding:16px 20px;margin-bottom:32px;font-size:.95rem;line-height:1.8;}
+.sec-hdr{border-top:2px solid #e5e7eb;margin-top:28px;padding-top:12px;margin-bottom:8px;}
+.sec-title{font-weight:700;font-size:1.05rem;}
+.sec-time{color:#6b7280;font-size:.85rem;}
+.seg{border-left:4px solid #e5e7eb;margin:8px 0;padding:8px 14px;background:#fff;border-radius:0 6px 6px 0;}
+.seg.keep{border-left-color:#16a34a;}.seg.delete{border-left-color:#dc2626;}.seg.unmarked{border-left-color:#d1d5db;}
+.seg-hdr{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+.seg-time{font-weight:600;font-size:.85rem;color:#374151;min-width:130px;}
+.seg-dec{font-weight:700;font-size:.85rem;}
+.seg-de{font-size:.92rem;color:#374151;line-height:1.5;}
+.seg-en{font-size:.82rem;color:#6b7280;font-style:italic;margin-top:3px;line-height:1.4;}
+.seg-en::before{content:"🇬🇧 ";}
+.seg-note{font-size:.82rem;color:#6b7280;margin-top:4px;font-style:italic;}
+.seg-note::before{content:"📝 Note: ";font-weight:600;}
+</style></head><body>
+<h1>Notizen — ${esc(videoName)}</h1>
+<div class="meta">Erstellt: ${now}</div>
+<div class="summary">
+<strong>Übersicht:</strong> ${segments.length} Segmente`;
+
+      if (counts.keep) html += ` &nbsp;✅ <span style="color:#16a34a">${counts.keep} Behalten</span>`;
+      if (counts.delete) html += ` &nbsp;🗑️ <span style="color:#dc2626">${counts.delete} Löschen</span>`;
+      if (counts.unmarked) html += ` &nbsp;<span style="color:#9ca3af">${counts.unmarked} nicht markiert</span>`;
+      if (counts.delete > 0) html += `<br>Zu entfernen: ~${removedStr}`;
+      html += `</div>`;
+
+      groups.forEach(g => {
+        html += `<div class="sec-hdr"><div class="sec-title">📍 ${esc(g.label)}</div><div class="sec-time">${g.startTime} – ${g.endTime}</div></div>`;
+        g.segments.forEach(s => {
+          const enText = translations[String(s.index)] || '';
+          html += `<div class="seg ${s.decision}">
+<div class="seg-hdr"><span class="seg-time">[${s.timestamp} – ${s.endTimestamp}]</span><span class="seg-dec" style="color:${dColor[s.decision]}">${dEmoji[s.decision] || s.decision}</span></div>
+<div class="seg-de">${esc(s.text)}</div>`;
+          if (enText) html += `<div class="seg-en">${esc(enText)}</div>`;
+          if (s.note) html += `<div class="seg-note">${esc(s.note)}</div>`;
+          html += `</div>`;
+        });
+      });
+
+      html += `</body></html>`;
+
+      // Open visual HTML in new tab
+      const win = window.open('', '_blank');
+      if (win) { win.document.write(html); win.document.close(); }
+
+      // Also download as plain .txt for Word/Notes
+      const txtLines = [`NOTIZEN — ${videoName}`, `Erstellt: ${now}`, ''];
+      groups.forEach(g => {
+        txtLines.push(`${'─'.repeat(60)}`);
+        txtLines.push(`📍 ${g.label}  (${g.startTime} – ${g.endTime})`);
+        txtLines.push('');
+        g.segments.forEach(s => {
+          const enText = translations[String(s.index)] || '';
+          const dec = s.decision === 'keep' ? '✅ BEHALTEN' : s.decision === 'delete' ? '🗑️ LÖSCHEN' : '— nicht markiert';
+          txtLines.push(`#${s.index + 1}  [${s.timestamp} – ${s.endTimestamp}]  ${dec}`);
+          txtLines.push(`DE: ${s.text}`);
+          if (enText) txtLines.push(`EN: ${enText}`);
+          if (s.note) txtLines.push(`📝 ${s.note}`);
+          txtLines.push('');
+        });
+      });
+      txtLines.push('─'.repeat(60));
+      txtLines.push(`Gesamt: ${segments.length} Segmente — ${counts.keep || 0} Behalten / ${counts.delete || 0} Löschen / ${counts.unmarked || 0} nicht markiert`);
+
+      const txtBlob = new Blob([txtLines.join('\n')], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '_Transkript.txt';
+      a.href = URL.createObjectURL(txtBlob);
+      a.download = 'Notizen-' + videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '.txt';
       a.click();
       URL.revokeObjectURL(a.href);
+    }
+
+    async function saveToDrive() {
+      if (!transcriptData || transcriptData.length === 0) return;
+      if (!currentJobId) { showToast('Kein aktiver Job'); return; }
+
+      const btn = document.querySelector('button[onclick="saveToDrive()"]');
+      const origText = btn ? btn.textContent : '';
+      if (btn) { btn.textContent = '⏳ Übersetze…'; btn.disabled = true; }
+
+      const videoName = activeFileName || 'Video';
+      const now = new Date().toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+      const segments = transcriptData.map((seg, i) => {
+        const row = document.querySelector(`#transcript-body tr[data-index="${i}"]`);
+        const decision = row ? (row.getAttribute('data-decision') || 'unmarked') : 'unmarked';
+        const note = row ? (row.getAttribute('data-note') || '') : '';
+        const endSec = i + 1 < transcriptData.length ? transcriptData[i + 1].start : seg.start + 30;
+        return { index: i, start: seg.start, end: endSec, timestamp: seg.timestamp, endTimestamp: formatTimeLocal(endSec), text: seg.text, decision, note };
+      });
+
+      let translations = {};
+      try {
+        const resp = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segments: segments.map(s => ({ index: s.index, text: s.text })) })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          translations = data.translations || {};
+        }
+      } catch (e) {
+        console.warn('Translation failed:', e.message);
+      }
+
+      if (btn) { btn.textContent = '⏳ Speichere…'; }
+
+      let groups = [];
+      if (lastAiGrouping && lastAiGrouping.paragraphs && lastAiGrouping.paragraphs.length > 0) {
+        lastAiGrouping.paragraphs.forEach(para => {
+          const segs = (para.segmentIndices || []).map(i => segments[i]).filter(Boolean);
+          if (segs.length > 0) groups.push({ label: para.labelEn || para.labelDe || 'Section', startTime: segs[0].timestamp, endTime: segs[segs.length - 1].endTimestamp, segments: segs });
+        });
+      }
+      if (groups.length === 0) groups = [{ label: 'Full Video', startTime: segments[0].timestamp, endTime: segments[segments.length - 1].endTimestamp, segments }];
+
+      const counts = { keep: 0, delete: 0, unmarked: 0 };
+      let removedSec = 0;
+      segments.forEach(s => {
+        counts[s.decision] = (counts[s.decision] || 0) + 1;
+        if (s.decision === 'delete') removedSec += s.end - s.start;
+      });
+
+      const txtLines = [`NOTIZEN — ${videoName}`, `Erstellt: ${now}`, ''];
+      groups.forEach(g => {
+        txtLines.push(`${'─'.repeat(60)}`);
+        txtLines.push(`📍 ${g.label}  (${g.startTime} – ${g.endTime})`);
+        txtLines.push('');
+        g.segments.forEach(s => {
+          const enText = translations[String(s.index)] || '';
+          const dec = s.decision === 'keep' ? '✅ BEHALTEN' : s.decision === 'delete' ? '🗑️ LÖSCHEN' : '— nicht markiert';
+          txtLines.push(`#${s.index + 1}  [${s.timestamp} – ${s.endTimestamp}]  ${dec}`);
+          txtLines.push(`DE: ${s.text}`);
+          if (enText) txtLines.push(`EN: ${enText}`);
+          if (s.note) txtLines.push(`📝 ${s.note}`);
+          txtLines.push('');
+        });
+      });
+      txtLines.push('─'.repeat(60));
+      txtLines.push(`Gesamt: ${segments.length} Segmente — ${counts.keep || 0} Behalten / ${counts.delete || 0} Löschen / ${counts.unmarked || 0} nicht markiert`);
+
+      try {
+        const txtFileName = 'Notizen-' + videoName.replace(/[^a-zA-Z0-9_-]/g, '_') + '.txt';
+        const r = await fetch(`/api/save-notes/${currentJobId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: txtLines.join('\n'), fileName: txtFileName, folderId: currentFolderId })
+        });
+        const data = await r.json();
+        if (data.success) showToast('✓ Notes uploaded to Drive');
+        else showToast('Fehler: ' + (data.error || 'Unbekannt'));
+      } catch (e) {
+        showToast('Drive-Fehler: ' + e.message);
+      } finally {
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+      }
     }
 
     function formatTimeLocal(seconds) {
@@ -1545,7 +1706,7 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     function handleMouseDown(e) {
       // Only start drag if clicking on a row (not on buttons or editable text)
       const row = e.target.closest('tr');
-      if (!row || e.target.closest('.btn-decision') || e.target.closest('.text-cell[contenteditable="true"]')) {
+      if (!row || e.target.closest('.btn-decision') || e.target.closest('.text-cell[contenteditable="true"]') || e.target.closest('.note-input')) {
         return;
       }
       
@@ -1781,34 +1942,13 @@ h1{font-size:1.5rem;margin:0 0 4px;}
     // ── Transcript Sync Functions ──────────────────────────────────────────────
     
     function initTranscriptSync() {
-      // Clear any existing interval
       stopTranscriptSync();
-      
-      // Start new sync interval (every 500ms as specified)
-      syncInterval = setInterval(syncTranscriptWithMedia, 500);
-      
-      // Add event listeners to stop sync when media ends
-      const videoPlayer = document.getElementById("video-player");
+      syncInterval = setInterval(syncTranscriptWithMedia, 300);
       const audioPlayer = document.getElementById("audio-player");
-      
-      const stopSyncOnEnd = () => {
-        stopTranscriptSync();
-      };
-      
-      videoPlayer.addEventListener("ended", stopSyncOnEnd);
-      audioPlayer.addEventListener("ended", stopSyncOnEnd);
-      
-      // Also stop sync when media is paused (optional, but good for cleanup)
-      videoPlayer.addEventListener("pause", () => {
-        if (audioPlayer.paused) {
-          stopTranscriptSync();
-        }
-      });
-      
-      audioPlayer.addEventListener("pause", () => {
-        if (videoPlayer.paused) {
-          stopTranscriptSync();
-        }
+      audioPlayer.addEventListener("ended", stopTranscriptSync);
+      audioPlayer.addEventListener("pause", stopTranscriptSync);
+      audioPlayer.addEventListener("play", () => {
+        if (!syncInterval) initTranscriptSync();
       });
     }
     
@@ -1820,30 +1960,17 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       
       // Clear playing highlight
       if (lastPlayingRowIndex !== -1) {
-        const tbody = document.getElementById("transcript-body");
-        const rows = tbody.querySelectorAll("tr");
-        if (rows[lastPlayingRowIndex]) {
-          rows[lastPlayingRowIndex].classList.remove("playing");
-        }
+        const prevRow = document.querySelector(`#transcript-body tr[data-index="${lastPlayingRowIndex}"]`);
+        if (prevRow) prevRow.classList.remove("playing");
         lastPlayingRowIndex = -1;
       }
     }
     
     function syncTranscriptWithMedia() {
-      const videoPlayer = document.getElementById("video-player");
       const audioPlayer = document.getElementById("audio-player");
-      
-      // Prefer video currentTime, fallback to audio
-      let currentTime = 0;
-      if (!videoPlayer.paused) {
-        currentTime = videoPlayer.currentTime;
-      } else if (!audioPlayer.paused) {
-        currentTime = audioPlayer.currentTime;
-      } else {
-        // Both are paused, don't update highlight
-        return;
-      }
-      
+      if (audioPlayer.paused) return;
+      const currentTime = audioPlayer.currentTime;
+
       // Find the segment that contains currentTime
       let playingRowIndex = -1;
       for (let i = 0; i < transcriptData.length; i++) {
@@ -1858,44 +1985,31 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       
       // Update highlight if changed
       if (playingRowIndex !== lastPlayingRowIndex) {
-        const tbody = document.getElementById("transcript-body");
-        const rows = tbody.querySelectorAll("tr");
-        
-        // Remove highlight from previous row
-        if (lastPlayingRowIndex !== -1 && rows[lastPlayingRowIndex]) {
-          rows[lastPlayingRowIndex].classList.remove("playing");
+        // Remove highlight from previous row (use data-index, not array index)
+        if (lastPlayingRowIndex !== -1) {
+          const prevRow = document.querySelector(`#transcript-body tr[data-index="${lastPlayingRowIndex}"]`);
+          if (prevRow) prevRow.classList.remove("playing");
         }
-        
+
         // Add highlight to new row
-        if (playingRowIndex !== -1 && rows[playingRowIndex]) {
-          rows[playingRowIndex].classList.add("playing");
-          
-          // Auto-scroll to keep playing row visible
-          rows[playingRowIndex].scrollIntoView({
-            behavior: "smooth",
-            block: "nearest"
-          });
+        if (playingRowIndex !== -1) {
+          const newRow = document.querySelector(`#transcript-body tr[data-index="${playingRowIndex}"]`);
+          if (newRow) {
+            newRow.classList.add("playing");
+            newRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
         }
-        
+
         lastPlayingRowIndex = playingRowIndex;
       }
     }
     
     function seekToSegment(startTime) {
-      const videoPlayer = document.getElementById("video-player");
       const audioPlayer = document.getElementById("audio-player");
-      
-      // Seek both players
-      videoPlayer.currentTime = startTime;
       audioPlayer.currentTime = startTime;
-      
-      // Play if paused
-      if (videoPlayer.paused && audioPlayer.paused) {
-        videoPlayer.play().catch(e => console.log("Video play failed:", e));
+      if (audioPlayer.paused) {
         audioPlayer.play().catch(e => console.log("Audio play failed:", e));
       }
-      
-      // Ensure sync is running
       if (!syncInterval) {
         initTranscriptSync();
       }

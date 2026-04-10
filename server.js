@@ -181,7 +181,6 @@ async function startTranscription(audioUrl) {
       audio_url: audioUrl,
       language: 'de',
       diarization: false,
-      disfluencies: true,
     },
     {
       headers: {
@@ -196,10 +195,11 @@ async function startTranscription(audioUrl) {
 }
 
 async function pollTranscription(transcriptionId, jobId) {
-  const maxAttempts = 120; // 10 minutes max (5s intervals)
+  const maxAttempts = 150; // 10 minutes max
 
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 5000));
+    const delay = i < 6 ? 2000 : 4000; // fast early polls, slower after
+    await new Promise(r => setTimeout(r, delay));
 
     const response = await axios.get(
       `https://api.gladia.io/v2/pre-recorded/${transcriptionId}`,
@@ -301,7 +301,7 @@ async function analyseWithDeepSeek(transcript) {
 
     const systemPrompt = 'You are a video transcript analyser. You will receive numbered transcript segments. Return ONLY valid JSON, no markdown, no explanation.';
     
-    const userPrompt = `Analyse these German transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... }, "suggestions": { "0": "keep", "1": "delete", ... }, "translations": { "0": "English translation", "1": "English translation", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). (6) suggestions: for EVERY segment index as a string key, assign "delete" if the segment is a repetition, restart, filler phrase (ähm, also nochmal, ich meine, warte mal, etc.), false start, off-topic remark, or private conversation — otherwise assign "keep". When in doubt, assign "keep". (7) translations: for EVERY segment index as a string key, provide a concise English translation of the German text — keep it natural, not literal. Here are the segments: ${JSON.stringify(segments)}`;
+    const userPrompt = `Analyse these German transcript segments and return JSON with this exact shape: { "paragraphs": [ { "labelDe": "German topic label", "labelEn": "English topic label", "segmentIndices": [0,1,2,...] } ], "safety": { "0": "green", "1": "yellow", "2": "red", ... }, "suggestions": { "0": "keep", "1": "delete", ... } }. Rules: (1) Group consecutive segments into topic paragraphs. Each paragraph is a coherent topic. (2) labelDe is a short German heading (3-6 words) describing the paragraph topic. (3) labelEn is the English translation of the label. (4) segmentIndices lists the 0-based indices of all segments in this paragraph. (5) safety: for EVERY segment index as a string key, assign one of: "green" (safe to cut — long pause or topic change), "yellow" (risky — mid-sentence or partial thought), "red" (never cut — mid-word or essential content). (6) suggestions: for EVERY segment index as a string key, assign "delete" if the segment is a repetition, restart, filler phrase (ähm, also nochmal, ich meine, warte mal, etc.), false start, off-topic remark, or private conversation — otherwise assign "keep". When in doubt, assign "keep". Here are the segments: ${JSON.stringify(segments)}`;
 
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
@@ -323,8 +323,10 @@ async function analyseWithDeepSeek(transcript) {
       }
     );
 
-    const content = response.data.choices[0].message.content;
-    
+    let content = response.data.choices[0].message.content;
+    // Strip markdown code block wrappers if DeepSeek wraps response in ```json ... ```
+    content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
     // Try to parse the JSON response
     try {
       const parsed = JSON.parse(content);
@@ -412,17 +414,9 @@ async function processJob(jobId, fileId) {
     notifyClients(jobId, { type: 'progress', step: 'extracting', pct: 20, message: 'Extrahiere Audio…' });
     await extractAudio(videoPath, audioPath);
 
-    // Generate 144p preview and persist audio in media directory
-    notifyClients(jobId, { type: 'progress', step: 'preview', pct: 30, message: 'Erstelle Vorschau…' });
+    // Persist audio in media directory
     const jobMediaDir = path.join(MEDIA_DIR, jobId);
     fs.mkdirSync(jobMediaDir, { recursive: true });
-    const previewPath = path.join(jobMediaDir, 'preview.mp4');
-    try {
-      await transcode144p(videoPath, previewPath);
-    } catch (err) {
-      console.error(`Failed to generate preview for job ${jobId}:`, err.message);
-      // Don't throw, continue without preview
-    }
     const persistAudioPath = path.join(jobMediaDir, 'audio.mp3');
     fs.copyFileSync(audioPath, persistAudioPath);
 
@@ -431,7 +425,7 @@ async function processJob(jobId, fileId) {
 
     let transcript;
     try {
-      notifyClients(jobId, { type: 'progress', step: 'uploading', pct: 35, message: 'Lade Audio hoch…' });
+      notifyClients(jobId, { type: 'progress', step: 'uploading', pct: 30, message: 'Lade Audio hoch…' });
       const audioUrl = await uploadToGladia(audioPath);
       notifyClients(jobId, { type: 'progress', step: 'transcribing', pct: 50, message: 'Starte Transkription…' });
       const transcriptionId = await startTranscription(audioUrl);
@@ -550,13 +544,55 @@ app.post('/transcribe', (req, res) => {
     return res.status(400).json({ error: 'Ungültige Google Drive URL. Format: drive.google.com/file/d/FILE_ID/...' });
   }
 
+  const { folderId } = req.body;
   const jobId = crypto.randomUUID();
-  jobs.set(jobId, { status: 'processing', clients: [], result: null });
+  jobs.set(jobId, { status: 'processing', clients: [], result: null, folderId: folderId || null });
 
   // Fire-and-forget — progress delivered via SSE
   processJob(jobId, fileId);
 
   res.json({ jobId });
+});
+
+// ── Google Drive upload ───────────────────────────────────────────────────────
+
+async function uploadToDrive(content, fileName, folderId) {
+  const { google } = require('googleapis');
+  const { Readable } = require('stream');
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    'urn:ietf:wg:oauth:2.0:oob'
+  );
+  oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
+  const res = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      mimeType: 'text/plain',
+      ...(folderId ? { parents: [folderId] } : {}),
+    },
+    media: { mimeType: 'text/plain', body: Readable.from([content]) },
+    fields: 'id,name,webViewLink',
+  });
+  return res.data;
+}
+
+app.post('/api/save-notes/:jobId', async (req, res) => {
+  const { jobId } = req.params;
+  const { content, fileName, folderId: bodyFolderId } = req.body;
+  if (!process.env.GOOGLE_REFRESH_TOKEN) {
+    return res.status(503).json({ error: 'Drive not configured' });
+  }
+  const job = jobs.get(jobId);
+  const folderId = bodyFolderId || job?.folderId || null;
+  try {
+    const file = await uploadToDrive(content, fileName, folderId);
+    res.json({ success: true, link: file.webViewLink });
+  } catch (err) {
+    console.error('Drive upload failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Server-Sent Events progress stream
@@ -640,7 +676,52 @@ app.get('/api/session/:jobId', (req, res) => {
   }
 });
 
-// ── AI Chat Interface ─────────────────────────────────────────────────────────────
+// ── Translation endpoint ──────────────────────────────────────────────────────
+
+app.post('/api/translate', async (req, res) => {
+  const { segments } = req.body;
+  if (!Array.isArray(segments) || segments.length === 0) {
+    return res.status(400).json({ error: 'segments array required' });
+  }
+
+  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+  if (!DEEPSEEK_API_KEY) {
+    return res.status(503).json({ error: 'Translation service not available' });
+  }
+
+  try {
+    const systemPrompt = 'You are a German to English translator. Translate each segment accurately and naturally. Return ONLY valid JSON, no markdown, no explanation.';
+    const userPrompt = `Translate these German transcript segments to English. Return exactly this JSON shape: { "translations": { "0": "English text", "1": "English text", ... } }. Use the "i" field as the key. Here are the segments: ${JSON.stringify(segments.map(s => ({ i: String(s.index), text: s.text })))}`;
+
+    const response = await axios.post(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 4096,
+        temperature: 0.1
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000
+      }
+    );
+
+    let content = response.data.choices[0].message.content;
+    content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const parsed = JSON.parse(content);
+    res.json(parsed);
+  } catch (err) {
+    console.error('Translation error:', err.message);
+    res.status(500).json({ error: 'Translation failed: ' + err.message });
+  }
+});
 
 // ── Media serving ─────────────────────────────────────────────────────────────
 
