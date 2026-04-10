@@ -477,18 +477,57 @@
     .app-description strong { color: #333; display: block; margin-bottom: 4px; font-size: 0.85rem; }
 
     /* Responsive: stack on small screens */
+    /* ── Sticky mobile audio bar ── */
+    #sticky-audio-bar {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #fff;
+      border-top: 2px solid #5b5ef4;
+      padding: 8px 14px 14px;
+      z-index: 500;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.13);
+      flex-direction: column;
+      gap: 4px;
+    }
+    #sticky-audio-bar.visible { display: flex; }
+    #sticky-audio-title {
+      font-size: 0.72rem;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #sticky-audio-bar audio { width: 100%; height: 36px; }
+    /* Never show sticky bar on desktop */
+    @media (min-width: 801px) { #sticky-audio-bar { display: none !important; } }
+
     @media (max-width: 800px) {
       .editor-layout { flex-direction: column; }
       .media-panel, .transcript-panel { width: 100%; position: static; }
+      /* Hide the in-panel audio player on mobile — it moves to sticky bar */
+      .audio-player-container { display: none; }
       .toolbar { gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
       .toolbar-sep { display: none; }
       .result-header { flex-direction: column; gap: 10px; }
-      /* Hide row number column on mobile — saves space */
+      /* Hide row number column — saves space */
       .num-col, .num-cell { display: none; }
+      /* Notiz column: narrower, textarea shrinks */
+      .note-cell { width: 72px; padding: 6px 3px; }
+      .note-input { font-size: 0.72rem; padding: 2px 4px; }
+      /* Decision column: compact horizontal pills */
+      .del-cell { width: 80px; padding: 4px 2px; }
+      .decision-buttons { flex-direction: row; gap: 3px; justify-content: flex-start; }
+      .btn-decision { font-size: 0; width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+      .btn-decision::before { font-size: 1rem; }
+      .btn-keep::before { content: "✅"; }
+      .btn-delete-btn::before { content: "🗑️"; }
+      /* Extra bottom padding for sticky audio bar */
+      body { padding-bottom: 110px !important; }
     }
 
     @media (max-width: 480px) {
-      body { padding: 12px 8px 60px; }
+      body { padding: 12px 8px 110px !important; }
       h1 { font-size: 1.2rem; }
       .subtitle { font-size: 0.82rem; }
       .card { padding: 14px 12px; }
@@ -499,15 +538,7 @@
       .file-list li { padding: 12px 8px; min-height: 48px; }
       .steps { gap: 0; flex-wrap: wrap; }
       .step { font-size: 0.68rem; flex: 0 0 auto; padding: 2px 4px; }
-      /* Decision buttons: stack vertically on very small screens */
-      .decision-buttons { flex-direction: column; gap: 4px; }
-      .btn-decision { font-size: 0.78rem; padding: 6px 8px; }
-      /* Timestamp column smaller */
       .ts-cell { font-size: 0.78rem; width: 52px; }
-      /* URL card: stack button below input */
-      #url-input-card .input-row { flex-direction: column; }
-      #url-input-card .input-row input { width: 100%; }
-      #url-input-card .input-row button { width: 100%; }
     }
   </style>
 </head>
@@ -600,7 +631,12 @@
   </div>
 
   <div class="copy-toast" id="copy-toast">Kopiert!</div>
-  
+
+  <!-- Mobile sticky audio bar -->
+  <div id="sticky-audio-bar">
+    <div id="sticky-audio-title"></div>
+  </div>
+
   <!-- Floating toolbar for drag selection -->
   <div class="floating-toolbar" id="floating-toolbar">
     <button class="btn-decision btn-keep" onclick="applyDecisionToSelected('keep')">✅ Behalten</button>
@@ -1100,6 +1136,14 @@
             const audioPlayer = document.getElementById('audio-player');
             audioPlayer.src = `/media/${jobId}/audio`;
             document.getElementById('media-title').textContent = activeFileName;
+
+            // On mobile: move audio player into sticky bottom bar
+            if (window.innerWidth <= 800) {
+              const bar = document.getElementById('sticky-audio-bar');
+              document.getElementById('sticky-audio-title').textContent = activeFileName;
+              bar.appendChild(audioPlayer);
+              bar.classList.add('visible');
+            }
 
             // Initialize transcript sync
             initTranscriptSync();

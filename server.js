@@ -198,7 +198,7 @@ async function pollTranscription(transcriptionId, jobId) {
   const maxAttempts = 150; // 10 minutes max
 
   for (let i = 0; i < maxAttempts; i++) {
-    const delay = i < 6 ? 2000 : 4000; // fast early polls, slower after
+    const delay = i < 6 ? 1200 : 2500; // fast early polls, slower after
     await new Promise(r => setTimeout(r, delay));
 
     const response = await axios.get(
@@ -622,7 +622,7 @@ app.get('/progress/:jobId', (req, res) => {
   }
 
   // Keep connection alive
-  const keepAlive = setInterval(() => res.write(': ping\n\n'), 10_000);
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 8_000);
 
   job.clients.push(res);
 
