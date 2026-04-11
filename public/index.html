@@ -549,6 +549,8 @@
       .btn-delete-btn::before { content: "🗑️"; }
       /* Extra bottom padding for sticky audio bar (audio + 2 buttons) */
       body { padding-bottom: 160px !important; }
+      /* Hide download/drive in main toolbar on mobile — sticky bar handles these */
+      .btn-desktop-action { display: none !important; }
     }
 
     @media (max-width: 480px) {
@@ -655,8 +657,8 @@
         <div class="transcript-actions" id="transcript-actions">
           <button class="btn-tool" onclick="applyDecisionToAll('keep')">✅ Alle behalten</button>
           <button class="btn-tool" onclick="applyDecisionToAll('delete')">🗑️ Alle löschen</button>
-          <button class="btn-tool" onclick="downloadTxt()">Notizen herunterladen</button>
-          <button class="btn-save" id="btn-save-drive" onclick="saveToDrive()">Notizen in Drive speichern</button>
+          <button class="btn-tool btn-desktop-action" onclick="downloadTxt()">Notizen herunterladen</button>
+          <button class="btn-save btn-desktop-action" id="btn-save-drive" onclick="saveToDrive()">Notizen in Drive speichern</button>
         </div>
       </div>
 
