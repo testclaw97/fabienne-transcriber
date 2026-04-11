@@ -355,6 +355,8 @@
 
     /* Row number column */
     .num-col { width: 32px; }
+    /* Zeit column — explicit width needed for table-layout:fixed */
+    .ts-col { width: 68px; }
     .num-cell {
       width: 32px;
       color: #bbb;
@@ -400,6 +402,11 @@
     tr[data-decision="delete"] {
       background-color: #fef2f2 !important;
       border-left: 3px solid #dc2626;
+      opacity: 0.6;
+    }
+    tr[data-decision="delete"] .text-editable {
+      text-decoration: line-through;
+      color: #888;
     }
     
     /* Selection for drag */
@@ -564,7 +571,7 @@
 
 
   <h1>Video Transkription</h1>
-  <p class="subtitle">Google Drive Video-Link einfügen → Transkript erhalten</p>
+  <p class="subtitle">Video auswählen → Transkript erhalten</p>
 
   <!-- File browser -->
   <div class="card">
@@ -605,8 +612,11 @@
         </div>
         <div class="media-title" id="media-title"></div>
 
-        <div class="app-description">
-          <strong>So funktioniert's</strong>
+        <div class="app-description" id="app-description">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <strong>So funktioniert's</strong>
+            <button onclick="document.getElementById('app-description').style.display='none'" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:1rem;line-height:1;padding:0;flex-shrink:0;" title="Schließen">✕</button>
+          </div>
           Hören Sie sich das Audio an – der aktuelle Abschnitt wird im Transkript automatisch hervorgehoben. Klicken Sie bei jedem Abschnitt auf <strong style="display:inline">✅ Behalten</strong> oder <strong style="display:inline">🗑️ Löschen</strong>, um zu entscheiden, was in die Notizen kommt. Am Ende speichern Sie die Notizen direkt in Google Drive oder laden Sie sie als Textdatei herunter.
         </div>
 
@@ -619,7 +629,10 @@
           <div class="toolbar">
             <span style="font-size:0.75rem;color:#888;display:flex;align-items:center;gap:6px;" title="Sicherheits-Ampel: Grün = sicher zu kürzen, Gelb = Vorsicht, Rot = nicht kürzen">🟢 sicher &nbsp;🟡 Vorsicht &nbsp;🔴 nicht kürzen</span>
             <div class="toolbar-sep"></div>
-            <button class="btn-tool active" id="ts-toggle-btn" onclick="toggleTimestamps()">Zeitstempel</button>
+            <button class="btn-tool active" id="ts-toggle-btn" onclick="toggleTimestamps()">Zeitstempel ✓</button>
+            <div class="toolbar-sep"></div>
+            <button class="btn-tool" style="background:#f0fdf4;color:#166534;border:1px solid #86efac;" onclick="applyDecisionToAll('keep')">✅ Alle</button>
+            <button class="btn-tool" style="background:#fff5f5;color:#991b1b;border:1px solid #fca5a5;" onclick="applyDecisionToAll('delete')">🗑️ Alle</button>
             <div class="toolbar-sep"></div>
             <button class="btn-tool" onclick="setFont('sm')">A−</button>
             <button class="btn-tool active" id="font-md-btn" onclick="setFont('md')">A</button>
@@ -640,6 +653,8 @@
           <tbody id="transcript-body"></tbody>
         </table>
         <div class="transcript-actions" id="transcript-actions">
+          <button class="btn-tool" onclick="applyDecisionToAll('keep')">✅ Alle behalten</button>
+          <button class="btn-tool" onclick="applyDecisionToAll('delete')">🗑️ Alle löschen</button>
           <button class="btn-tool" onclick="downloadTxt()">Notizen herunterladen</button>
           <button class="btn-save" id="btn-save-drive" onclick="saveToDrive()">Notizen in Drive speichern</button>
         </div>
@@ -959,6 +974,9 @@
 
     // ── Browse ────────────────────────────────────────────────────────────────
     async function browse(folderId, folderName) {
+      // Hide transcript when navigating back to file browser
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('transcript-actions').classList.remove('visible');
       currentFolderId = folderId;
       if (folderId === null) {
         navStack = [{ id: null, name: translations[currentMode]['Alle Ordner'] }];
@@ -1143,8 +1161,16 @@
         if (msg.type === 'done') {
           evtSource.close();
           activeJobId = null;
-          document.querySelectorAll('.btn-transcribe').forEach(b => b.disabled = false);
-          setProgress('transcribing', 100, 'Fertig!');
+          document.querySelectorAll('.btn-transcribe').forEach(b => {
+            b.disabled = false;
+            b.textContent = 'Neu transkribieren';
+          });
+          setProgress('ai_grouping', 100, 'Fertig!');
+          // Auto-collapse progress panel after 2.5s
+          setTimeout(() => {
+            const ps = document.getElementById('progress-section');
+            if (ps) ps.style.display = 'none';
+          }, 2500);
           lastAiGrouping = msg.aiGrouping || null;
           lastTranscript = msg.transcript;
           
@@ -1251,6 +1277,9 @@
       document.getElementById("result-section").style.display = "block";
       document.getElementById("transcript-actions").classList.add("visible");
       document.getElementById("result-section").scrollIntoView({ behavior: "smooth", block: "start" });
+
+      // Restore font preference
+      if (window._savedFont) { setFont(window._savedFont); }
 
       // Initialize drag selection after rendering
       initDragSelection();
@@ -1402,7 +1431,8 @@
       noteTextarea.className = 'note-input';
       noteTextarea.placeholder = translations[currentMode]['Notiz'] + '…';
       noteTextarea.rows = 1;
-      noteTextarea.style.cssText = 'flex:1;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;padding:3px 6px;resize:none;';
+      noteTextarea.maxLength = 400;
+      noteTextarea.style.cssText = 'flex:1;min-width:60px;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;padding:3px 6px;resize:none;';
       noteTextarea.oninput = function() {
         tr.setAttribute('data-note', this.value);
         triggerAutoSave();
@@ -1453,6 +1483,7 @@
       table.classList.toggle('timestamps-hidden', !showTimestamps);
       const btn = document.getElementById('ts-toggle-btn');
       btn.classList.toggle('active', showTimestamps);
+      btn.textContent = showTimestamps ? 'Zeitstempel ✓' : 'Zeitstempel';
     }
 
     const fontSizes = ['sm', 'md', 'lg', 'xl'];
@@ -1461,6 +1492,7 @@
       fontSizes.forEach(s => table.classList.remove('font-' + s));
       table.classList.add('font-' + size);
       currentFont = size;
+      localStorage.setItem('fabienne_font', size);
       document.querySelectorAll('.btn-tool').forEach(b => {
         if (b.id === 'ts-toggle-btn') return;
         b.classList.remove('active');
@@ -1471,6 +1503,14 @@
         if (b.textContent === labels[size]) b.classList.add('active');
       });
     }
+    // Restore saved font preference on load
+    (function() {
+      const saved = localStorage.getItem('fabienne_font');
+      if (saved && fontSizes.includes(saved)) {
+        // Apply after DOM ready — will be called once transcript is rendered
+        window._savedFont = saved;
+      }
+    })();
 
     // ── Export ────────────────────────────────────────────────────────────────
     function buildFullText() {
@@ -1991,6 +2031,11 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       selectedRows.forEach(row => setDecision(row, decision));
       clearSelection();
     }
+
+    function applyDecisionToAll(decision) {
+      const rows = document.querySelectorAll('#transcript-body tr:not(.ai-paragraph-header)');
+      rows.forEach(row => setDecision(row, decision));
+    }
     
     // Also need to clear selection when clicking on individual decision buttons
     function setDecision(row, decision) {
@@ -2216,10 +2261,10 @@ h1{font-size:1.5rem;margin:0 0 4px;}
   <div id="drive-success-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);text-align:center;">
       <div style="font-size:2rem;margin-bottom:10px;">✅</div>
-      <p style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Notes uploaded to Drive</p>
-      <p style="margin:0 0 20px;font-size:0.9rem;color:#6b7280;">Your notes have been saved successfully.</p>
+      <p style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Notizen in Drive gespeichert</p>
+      <p style="margin:0 0 20px;font-size:0.9rem;color:#6b7280;">Ihre Notizen wurden erfolgreich gespeichert.</p>
       <div style="display:flex;gap:10px;justify-content:center;">
-        <a id="drive-success-link" href="#" target="_blank" style="padding:9px 20px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open in Drive</a>
+        <a id="drive-success-link" href="#" target="_blank" style="padding:9px 20px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">In Drive öffnen</a>
         <button onclick="document.getElementById('drive-success-modal').style.display='none'" style="padding:9px 20px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:#fff;font-size:0.9rem;">Schließen</button>
       </div>
     </div>
