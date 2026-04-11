@@ -1689,9 +1689,10 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       if (!transcriptData || transcriptData.length === 0) return;
       if (!currentJobId) { showToast('Kein aktiver Job'); return; }
 
-      const btn = document.querySelector('button[onclick="saveToDrive()"]');
+      const saveBtns = document.querySelectorAll('button[onclick="saveToDrive()"]');
+      const btn = saveBtns[0] || null;
       const origText = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = '⏳ Übersetze…'; btn.disabled = true; }
+      saveBtns.forEach(b => { b.textContent = '⏳ Übersetze…'; b.disabled = true; });
 
       const videoName = activeFileName || 'Video';
       const now = new Date().toLocaleString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -1719,7 +1720,7 @@ h1{font-size:1.5rem;margin:0 0 4px;}
         console.warn('Translation failed:', e.message);
       }
 
-      if (btn) { btn.textContent = '⏳ Speichere…'; }
+      saveBtns.forEach(b => { b.textContent = '⏳ Speichere…'; });
 
       let groups = [];
       if (lastAiGrouping && lastAiGrouping.paragraphs && lastAiGrouping.paragraphs.length > 0) {
@@ -1777,7 +1778,7 @@ h1{font-size:1.5rem;margin:0 0 4px;}
           } catch (err) {
             lastErr = err;
             if (err.message !== 'server_starting') throw err;
-            if (btn) btn.textContent = 'Server startet… ☕';
+            saveBtns.forEach(b => { b.textContent = 'Server startet… ☕'; });
             await new Promise(r => setTimeout(r, 10000));
           }
         }
@@ -1790,7 +1791,7 @@ h1{font-size:1.5rem;margin:0 0 4px;}
       } catch (e) {
         showToast('Drive-Fehler: ' + e.message);
       } finally {
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
+        saveBtns.forEach(b => { b.textContent = origText; b.disabled = false; });
       }
     }
 
