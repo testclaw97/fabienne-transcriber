@@ -877,7 +877,7 @@ function cleanOldMedia() {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`Fabienne Transcription running at http://localhost:${PORT}`);
   cleanOldMedia();
 });
